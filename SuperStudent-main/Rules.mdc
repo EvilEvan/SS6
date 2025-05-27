@@ -1,0 +1,17 @@
+Rules.mdc
+Educational game for Kindergarteners.
+Consits of multiple level. As of today (21/4/2025) there are 4 levels. Letters, shapes, c/l case, and numbers. '
+Along with smooth rendering gameplay, game always has to be visualy appealing without causing game 
+DO NOT DISTURB SCREEN DIMENSIONS OR FONT SIZES. THE GAME IS MEANT TO RUN ON A MASSIVE "QBOARD" DEVICE running on android (using pydriod3 to run on android)
+
+"As a senior ML engineer specializing in <Software angineering and game development>
+* Review this <code> implementation
+* Identify performance bottlenecks
+* Suggest optimization strategies for better user experience and player engagement
+* In 'C/L Case' mode, the centre display must always use an uppercase letter (e.g., 'A'); falling lowercase 'a' should display the Greek alpha 'α'.
+*Prompt request should be highest priority.
+****Prohibitted from changing already LOGGED history!!****
+**Log history -model - date - logic behind code
+Add short suggestions or insight to notes.
+
+

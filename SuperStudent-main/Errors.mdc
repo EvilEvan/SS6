@@ -1,0 +1,68 @@
+Errors.mdc
+---
+22/04/2025 10:07
+error occurred: module 'pygame' has no attribute 'Clock'
+Traceback (most recent call last):
+  File "C:\Users\User\OneDrive\Desktop\VS\SuperStudent\superstudent.py", line 1784, in <module>
+    while game_loop(mode):
+          ~~~~~~~~~^^^^^^
+  File "C:\Users\User\OneDrive\Desktop\VS\SuperStudent\superstudent.py", line 411, in game_loop
+    clock = pygame.Clock()
+            ^^^^^^^^^^^^
+AttributeError: module 'pygame' has no attribute 'Clock'
+---
+22/04/2025 08:29
+  while game_loop(mode):
+          ~~~~~~~~~^^^^^^
+  File "C:\Users\User\OneDrive\Desktop\VS\SuperStudent\superstudent.py", line 525, in game_loop
+    disperse_particles[i]["color"] = distractor_colors[color_idx]
+                                     ~~~~~~~~~~~~~~~~~^^^^^^^^^^^
+IndexError: list index out of range
+---
+21/04/2025 14:40 
+An error occurred: cannot access local variable 'overall_destroyed' where it is not associated with a value
+Traceback (most recent call last):
+  File "C:\Users\User\OneDrive\Desktop\VS\SuperStudent\superstudent.py", line 1824, in <module>
+    while game_loop(mode):
+          ~~~~~~~~~^^^^^^
+  File "C:\Users\User\OneDrive\Desktop\VS\SuperStudent\superstudent.py", line 1237, in game_loop
+    display_info(score, current_ability, target_letter, overall_destroyed + letters_destroyed, TOTAL_LETTERS, mode) # Pass mode
+                                                        ^^^^^^^^^^^^^^^^^
+UnboundLocalError: cannot access local variable 'overall_destroyed' where it is not associated with a value
+---
+21/04/2025 14:35
+ File "C:\Users\User\OneDrive\Desktop\VS\SuperStudent\superstudent.py", line 1823, in <module>
+    while game_loop(mode):
+          ~~~~~~~~~^^^^^^
+  File "C:\Users\User\OneDrive\Desktop\VS\SuperStudent\superstudent.py", line 1236, in game_loop  
+    display_info(score, cur  File "C:\Users\User\OneDrive\Desktop\VS\SuperStudent\superstudent.py", line 1236, in game_loop
+    display_info(score, cur  File "C:\Users\User\OneDrive\Desktop\VS\SuperStudent\superstudent.py", line 1236, in game_loop
+    display_info(score, cur  File "C:\Users\User\OneDrive\Desktop\VS\SuperStudent\superstudent.py", line 1236, in game_loop
+    display_info(score, curSuperStudent\superstudent.py", line 1236, in game_loop
+    display_info(score, current_ability, target_letter    display_info(score, current_abiliUnboundLocalError: cannot access local variable 
+    'overall_destroyed' where it is not associated with a value
+---
+21/04/2025 14:27
+An error occurred: cannot access local variable 'overall_destroyed' where it is not associated with a value
+Traceback (most recent call last):
+  File "C:\Users\User\OneDrive\Desktop\VS\SuperStudent\superstudent.py", line 1819, in <module>
+    while game_loop(mode):
+          ~~~~~~~~~^^^^^^
+  File "C:\Users\User\OneDrive\Desktop\VS\SuperStudent\superstudent.py", line 1232, in game_loop
+    display_info(score, current_ability, target_lrent_ability, target_letter, overall_destroyed + letters_destroyed, TOTAL_LETTERS, mode) # Pass mode
+                                                        ^^^^^^^^^^^^^^^^^
+UnboundLocalError: cannot access local variable 'overall_destroyed' where it is not associated with a value
+---
+21/04/2025 2:22
+An error occurred: cannot access local variable 'WIDTH' where it is not associated with a value
+Traceback (most recent call last):
+  File "C:\Users\User\OneDrive\Desktop\VS\SuperStudent\superstudent.py", line 1820, in <module>
+    while game_loop(mode):
+          ~~~~~~~~~^^^^^^
+  File "C:\Users\User\OneDrive\Desktop\VS\SuperStudent\superstudent.py", line 427, in game_loop
+    create_swirl_particles(WIDTH // 2, HEIGHT // 2)        
+                           ^^^^^
+UnboundLocalError: cannot access local variable 'WIDTH' where it is not associated with a value
+
+// Cause: In the "colors" mode branch of game_loop, WIDTH and HEIGHT were redefined as local variables (via screen.get_size()), which shadows the global WIDTH/HEIGHT. This causes UnboundLocalError when other code expects the global WIDTH/HEIGHT to be available.
+// Solution: Remove the local assignment of WIDTH, HEIGHT in the "colors" mode, and always use the global WIDTH, HEIGHT for all logic and drawing.

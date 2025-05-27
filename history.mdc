@@ -1,0 +1,594 @@
+---
+description: 
+globs: 
+alwaysApply: false
+---
+# SS6 Development History
+
+## Investigation of Universal Class Features and Welcome Screen Separation
+
+### Date: Current Session
+
+#### Objective 1: Investigation of Universal Class Features
+**Status: COMPLETED**
+
+**Findings:**
+1. **MultiTouchManager Class** - Moved from original SS6 to universal_class.py
+   - Handles multi-touch events and coordinate conversion
+   - Prevents duplicate touch handling with cooldown system
+   - Methods: handle_touch_down(), handle_touch_up(), handle_touch_motion(), reset()
+   - Used in game_loop() for FINGERDOWN, FINGERUP, FINGERMOTION events
+
+2. **GlassShatterManager Class** - Moved from original SS6 to universal_class.py
+   - Manages glass crack effects and screen shatter
+   - Handles misclick events and screen shake
+   - Methods: handle_misclick(), draw_cracks(), get_screen_shake_offset(), update()
+   - Triggered separately via glass_shatter_manager.handle_misclick() calls
+
+3. **HUDManager Class** - Moved from original SS6 to universal_class.py
+   - Manages heads-up display elements (score, ability, target, progress)
+   - Different layouts for different game modes
+   - Methods: display_info(), display_collision_status(), display_sample_target()
+   - Called via hud_manager.display_info() in game loops
+
+**Integration Points:**
+- All three classes are instantiated in init_resources() function
+- Called separately throughout the game loop instead of inline code
+- Proper separation of concerns achieved
+
+#### Objective 2: Welcome Screen Separation
+**Status: COMPLETED**
+
+**Dependencies Identified:**
+- pygame, random, math modules
+- Global variables: DISPLAY_MODE, WIDTH, HEIGHT, screen, small_font
+- Functions: detect_display_type(), init_resources()
+- Constants: FLAME_COLORS, WHITE, BLACK from settings
+- Settings imports: DEBUG_MODE, SHOW_FPS
+
+**Implementation:**
+- Created welcome_screen.py with complete welcome screen functionality
+- Extracted welcome_screen() function with all existing features:
+  - Dynamic orbital particles with pulsing effects
+  - Smooth color transitions for title
+  - 3D title effects with glow and shadows
+  - Interactive buttons with hover effects
+  - Auto-detection display mode indicator
+  - SANGSOM collaboration text with pulsing effect
+  - Creator credits with floating animation
+  - FPS display in debug mode
+- Updated SS6.origional.py to import and use the new module
+- Maintained exact functionality without any additions
+- Function signature: welcome_screen(WIDTH, HEIGHT, screen, small_font, init_resources_callback)
+- Returns DISPLAY_MODE for proper integration
+
+**Files Modified:**
+- Created: welcome_screen.py
+- Modified: SS6.origional.py (removed inline function, added import)
+- Updated: history.mdc (this log)
+
+#### Objective 3: Level Select Screen Separation
+**Status: COMPLETED**
+
+**Task:** Separate the level_menu() function from SS6.origional.py and add it to welcome_screen.py module
+
+**Dependencies Identified:**
+- pygame, random, math modules
+- Global variables: WIDTH, HEIGHT, screen, small_font
+- Constants: FLAME_COLORS, WHITE, BLACK from settings
+- Function: draw_neon_button() - needs to be moved as well
+- Particle system with outward movement (reverse of welcome screen)
+- Color transition system for title
+- Button layout and interaction handling
+
+**Implementation Completed:**
+1. ✅ Moved draw_neon_button() function to welcome_screen.py
+   - Updated function signature to accept screen parameter
+   - Maintains exact functionality with neon glow effects
+2. ✅ Moved level_menu() function to welcome_screen.py
+   - Updated function signature: level_menu(WIDTH, HEIGHT, screen, small_font)
+   - Preserved all original features:
+     - Outward moving particle system (700 particles)
+     - Smooth color transitions for title
+     - Five game mode buttons (A B C, 1 2 3, Shapes, C/L Case, Colors)
+     - Cyberpunk neon button styling
+     - Event handling for mouse clicks and keyboard
+3. ✅ Updated SS6.origional.py imports
+   - Added level_menu to import statement from welcome_screen
+   - Removed old function definitions (150+ lines removed)
+4. ✅ Updated main function call
+   - Changed level_menu() to level_menu(WIDTH, HEIGHT, screen, small_font)
+   - Maintains exact same functionality and return values
+
+**Files Modified:**
+- Modified: welcome_screen.py (added draw_neon_button and level_menu functions)
+- Modified: SS6.origional.py (removed old functions, updated imports and function call)
+- Updated: history.mdc (this log)
+
+**Benefits Achieved:**
+- Better code organization and separation of concerns
+- Centralized screen/menu functionality in welcome_screen module
+- Reduced main file size by ~150 lines
+- Maintained exact functionality without any changes to game behavior
+- Easier maintenance and future modifications to menu systems
+
+## Colors Level Separation and Levels Module Creation
+
+### Date: Current Session
+
+#### Objective: Create Levels Module and Separate Colors Level
+**Status: COMPLETED**
+
+**Task:** Create a "Levels" directory/module and extract the Colors level logic from SS6.origional.py into a separate class-based implementation.
+
+**Implementation Completed:**
+
+1. ✅ **Created Levels Module Structure**
+   - Created `levels/` directory
+   - Created `levels/__init__.py` with ColorsLevel import
+   - Established proper Python package structure
+
+2. ✅ **Created ColorsLevel Class** (`levels/colors_level.py`)
+   - **Class Structure:** Object-oriented design with proper encapsulation
+   - **Dependencies:** Imports from settings, universal_class modules
+   - **Initialization:** Takes all necessary parameters (screen, managers, functions)
+   - **State Management:** Proper reset and state tracking methods
+   - **Game Flow:** Separated into logical methods:
+     - `_show_mother_dot_vibration()` - Initial color display animation
+     - `_wait_for_dispersion_start()` - Wait for player input
+     - `_show_dispersion_animation()` - Dot dispersion and creation
+     - `_main_game_loop()` - Core gameplay loop
+     - `_handle_events()` - Event processing (mouse/touch)
+     - `_handle_click()` - Click/touch collision detection
+     - `_destroy_target_dot()` - Target destruction logic
+     - `_switch_target_color()` - Color switching mechanism
+     - `_handle_checkpoint()` - Checkpoint screen management
+     - `_update_dots()` - Dot physics and bouncing
+     - `_handle_dot_collisions()` - Inter-dot collision system
+     - `_draw_frame()` - Complete frame rendering
+     - `_generate_new_dots()` - Dynamic dot generation
+
+3. ✅ **Universal Class Integration**
+   - **GlassShatterManager:** Screen crack effects and game over detection
+   - **MultiTouchManager:** Touch input handling with cooldown
+   - **HUDManager:** UI display for score, target color, progress
+   - **ParticleManager:** Collision and visual effects
+
+4. ✅ **Updated Main Game File** (`SS6.origional.py`)
+   - Added import: `from levels import ColorsLevel`
+   - Replaced entire colors level logic (~600 lines) with class instantiation
+   - Proper parameter passing including function references
+   - Maintained exact same functionality and return behavior
+
+5. ✅ **Features Preserved:**
+   - **Color System:** 5 colors (Blue, Red, Green, Yellow, Purple) with random selection
+   - **Mother Dot Animation:** Vibration and dispersion sequences
+   - **Dot Physics:** Bouncing, collision detection, velocity damping
+   - **Collision Delay:** 5-second delay before dot-to-dot collisions
+   - **Target Switching:** After 5 target dots destroyed
+   - **Checkpoint System:** Every 10 dots with continue/menu options
+   - **Ghost Notifications:** Large color reminders with fade effects
+   - **Dynamic Generation:** New dots when targets depleted
+   - **Glass Shatter:** Misclick crack system with game over
+   - **Touch Support:** Multi-touch with coordinate conversion
+   - **Visual Effects:** Explosions, particles, screen shake
+   - **HUD Display:** Score, target color, remaining dots, collision status
+
+**Files Created:**
+- `levels/__init__.py` - Package initialization
+- `levels/colors_level.py` - Complete ColorsLevel class (600+ lines)
+
+**Files Modified:**
+- `SS6.origional.py` - Replaced colors logic with class call, added import
+- `history.mdc` - This log entry
+
+**Technical Benefits:**
+- **Code Organization:** Level-specific logic properly encapsulated
+- **Maintainability:** Easier to modify colors level independently
+- **Reusability:** Class can be instantiated multiple times
+- **Testing:** Isolated level logic for better testing
+- **Scalability:** Framework for adding more level classes
+- **Separation of Concerns:** Game engine vs level-specific logic
+
+**Functionality Verification:**
+- All original colors level features maintained
+- Same game flow and user experience
+- Proper integration with universal classes
+- Function parameter passing working correctly
+- Return values preserved for level restart/menu navigation
+
+## Alphabet and Numbers Sequence Fixes
+
+### Date: Current Session
+
+#### Objective 1: Fix ABC Level Letter Case
+**Status: COMPLETED**
+
+**Issue:** In the "ABC" level, the raining down target letters were all lowercase instead of capital letters.
+
+**Root Cause:** In settings.py, the alphabet sequence was defined as:
+```python
+"alphabet": list("abcdefghijklmnopqrstuvwxyz")
+```
+
+**Solution:** Updated the alphabet sequence to use uppercase letters:
+```python
+"alphabet": list("ABCDEFGHIJKLMNOPQRSTUVWXYZ")
+```
+
+#### Objective 2: Fix Numbers Level Starting Point
+**Status: COMPLETED**
+
+**Issue:** In the "numbers" level (123), the target started from 0, but numbers should start from 1 and continue to 10 before triggering the checkpoint screen.
+
+**Root Cause:** In settings.py, the numbers sequence was defined as:
+```python
+"numbers": list("0123456789")
+```
+This created a sequence starting from 0 and only going to 9 (10 numbers total).
+
+**Solution:** Updated the numbers sequence to start from 1 and go to 10:
+```python
+"numbers": [str(i) for i in range(1, 11)]
+```
+This creates the sequence: ["1", "2", "3", "4", "5", "6", "7", "8", "9", "10"]
+
+**Files Modified:**
+- `settings.py` - Updated SEQUENCES dictionary with corrected alphabet and numbers sequences
+- `history.mdc` - This log entry
+
+**Technical Details:**
+- Both changes were made in the SEQUENCES dictionary in settings.py
+- The alphabet change ensures all falling letters and center display show capital letters
+- The numbers change provides the correct sequence from 1-10 as requested
+- No other code changes required as the game logic properly uses these sequences
+- Checkpoint system will now trigger after 10 numbers (1-10) instead of 10 digits (0-9)
+
+**Verification:**
+- ABC level now displays capital letters A-Z
+- Numbers level now starts from 1 and goes through 10
+- Both levels maintain proper checkpoint triggering every 10 targets
+- All other game functionality remains unchanged
+
+## Checkpoint System Fixes and CheckpointManager Creation
+
+### Date: Current Session
+
+#### Issue Identified: Numbers Level Checkpoint Problem
+**Status: COMPLETED**
+
+**Problem:** In the numbers level, when completed to number 10, it was jumping to level select screen instead of triggering the checkpoint screen.
+
+**Root Cause Analysis:**
+1. The checkpoint logic in the "All Groups Completed" section was using a complex `checkpoint_waiting` system that wasn't working properly
+2. The code set `checkpoint_waiting = True` but then immediately checked if `checkpoint_delay_frames <= 0` which it wasn't, so the checkpoint screen never showed
+3. The checkpoint_screen function was scattered throughout the codebase and not centralized
+
+#### Solution: CheckpointManager Universal Class
+**Status: COMPLETED**
+
+**Implementation:**
+
+1. ✅ **Created CheckpointManager Class** (`universal_class.py`)
+   - **Centralized Management:** Single class to handle all checkpoint screens across game modes
+   - **Visual Effects:** Swirling particles, color transitions, neon buttons
+   - **State Management:** Proper storage and restoration of colors mode state
+   - **User Interaction:** Mouse click handling for Continue/Menu buttons
+   - **Mode-Specific Logic:** Different button text for shapes mode (Replay Level vs Continue)
+
+2. ✅ **Updated SS6.origional.py**
+   - **Import:** Added CheckpointManager to imports from universal_class
+   - **Initialization:** Added checkpoint_manager global variable and initialization in init_resources()
+   - **Integration:** Updated colors level to use checkpoint_manager.show_checkpoint_screen
+   - **Fixed Logic:** Simplified checkpoint logic in main game loop
+   - **Removed Complexity:** Eliminated problematic checkpoint_waiting delay system
+   - **Direct Calls:** Replaced all checkpoint_screen() calls with checkpoint_manager.show_checkpoint_screen()
+   - **Cleanup:** Removed old checkpoint_screen function completely (~100 lines removed)
+
+3. ✅ **Updated Colors Level** (`levels/colors_level.py`)
+   - **Parameter Fix:** Updated checkpoint function call to pass screen parameter
+   - **Compatibility:** Maintained existing functionality with new checkpoint manager
+
+4. ✅ **Fixed Level Completion Logic**
+   - **Numbers Level:** Now properly shows checkpoint screen after completing 1-10
+   - **Alphabet Level:** Checkpoint screen shows after completing A-Z groups
+   - **Shapes Level:** Checkpoint screen shows after both rounds
+   - **All Modes:** Consistent checkpoint behavior across all game modes
+
+**Technical Details:**
+- **CheckpointManager Features:**
+  - Screen size adaptation (WIDTH, HEIGHT parameters)
+  - Font system integration (fonts array, small_font)
+  - Button positioning and sizing (300x80 buttons, centered layout)
+  - Visual effects (150 swirling particles, color transitions)
+  - State preservation for colors mode (color_idx, target_dots_left, etc.)
+  - Neon button rendering with glow effects
+  - Event handling (mouse clicks, quit, escape)
+
+- **Checkpoint Triggers:**
+  - Every 10 targets destroyed (maintained existing logic)
+  - Level completion (all groups finished)
+  - Proper timing without complex delay systems
+
+- **Return Values:**
+  - True: Continue game or restart level
+  - False: Return to level menu
+
+**Files Modified:**
+- `universal_class.py` - Added CheckpointManager class (~150 lines added)
+- `SS6.origional.py` - Updated imports, initialization, removed old function, fixed logic
+- `levels/colors_level.py` - Updated function call parameter
+- `history.mdc` - This log entry
+
+**Verification:**
+- Numbers level (1-10) now shows checkpoint screen after completion
+- Alphabet level shows checkpoints every 10 letters and at completion
+- Shapes level shows checkpoint after both rounds
+- Colors level maintains existing checkpoint functionality
+- All checkpoint screens have consistent visual design and behavior
+- Proper state management for colors mode continuation
+
+**Benefits Achieved:**
+- **Centralized Code:** All checkpoint logic in one universal class
+- **Consistent UX:** Same checkpoint screen design across all modes
+- **Simplified Logic:** Removed complex timing and delay systems
+- **Better Maintenance:** Easier to modify checkpoint behavior
+- **Fixed Bug:** Numbers level now works correctly
+- **Code Reduction:** Removed ~100 lines of duplicate code
+
+## Shapes Level Color Fix
+
+### Date: Current Session
+
+#### Objective: Fix Shapes Level Color Issues
+**Status: COMPLETED**
+
+**Problem Identified:**
+- User reported that shapes level was not working correctly after refactoring
+- Center target shape was flashing random flame colors instead of being solid black
+- Falling shapes were white instead of black
+- This deviated from the original implementation
+
+**Root Cause Analysis:**
+- During refactoring to separate shapes level into its own class, the color logic was incorrectly changed
+- Original code used BLACK color for both center target and falling shapes
+- Refactored code mistakenly used random flame colors for center target and WHITE for falling shapes
+
+**Original Implementation (from SuperStudent.py):**
+```python
+# Center target
+outline_color = BLACK # Use black outline for shapes
+
+# Falling shapes  
+color = BLACK # always draw falling shapes as solid BLACK border
+```
+
+**Incorrect Refactored Implementation:**
+```python
+# Center target
+center_target_color = random.choice(FLAME_COLORS)  # WRONG
+
+# Falling shapes
+color = WHITE  # WRONG
+```
+
+**Fix Applied:**
+1. **Center Target Display** (`_draw_center_target` method):
+   - Changed from `random.choice(FLAME_COLORS)` to `BLACK`
+   - Restored original solid black outline appearance
+
+2. **Falling Shapes** (`_draw_shape` method):
+   - Changed from `WHITE` to `BLACK`
+   - Restored original black outline appearance for all falling shapes
+
+**Files Modified:**
+- `levels/shapes_level.py` - Fixed color constants in two methods
+- `history.mdc` - This log entry
+
+**Result:**
+- Shapes level now displays correctly with black outlines as in original
+- Center target shape is solid black (not flashing colors)
+- Falling shapes are black outlines (not white)
+- Functionality restored to match original implementation exactly
+
+## Universal Class Integration Fix for Shapes Level
+
+### Date: Current Session
+
+#### Objective: Implement Missing Universal Class Features in Shapes Level
+**Status: IN PROGRESS**
+
+**Problem Identified:**
+- User reported that shapes level is missing necessary features from universal class
+- Shapes level was not properly integrated with all universal class managers
+- Missing import statements and method calls
+
+**Missing Features Identified:**
+
+1. **Import Statement Missing:**
+   - Shapes level was missing: `from universal_class import GlassShatterManager, HUDManager, MultiTouchManager, CheckpointManager`
+   - This was causing the level to not have access to universal class functionality
+
+2. **Universal Class Method Calls:**
+   - All basic universal class calls are present (reset, update, draw_cracks, etc.)
+   - HUD display_info call is present and working
+   - Glass shatter manager integration is complete
+   - Multi-touch manager integration is complete
+   - Checkpoint manager integration is complete
+
+**Fixes Applied:**
+1. ✅ **Added Missing Import Statement**
+   - Added proper import from universal_class module
+   - Now shapes level has access to all universal class features
+
+**Current Status:**
+- Basic universal class integration appears complete
+- Need to verify if any specific method calls or features are still missing
+- All major universal class managers are properly integrated
+
+**Files Modified:**
+- `levels/shapes_level.py` - Added universal class import
+- `history.mdc` - This log entry
+
+**Next Steps:**
+- Test shapes level to identify any remaining missing features
+- Verify all universal class functionality is working correctly
+
+## Flamethrower Effect Separation and Universal Implementation
+
+### Date: Current Session
+
+#### Objective: Separate Flamethrower Effect and Implement Across All Levels Except Colors
+**Status: COMPLETED**
+
+**Task:** Extract the flamethrower effect from individual level implementations and create a universal FlamethrowerManager class in universal_class.py, then implement it across all levels except the Colors level.
+
+**Implementation Completed:**
+
+1. ✅ **Created Universal FlamethrowerManager Class** (`universal_class.py`)
+   - **Class Structure:** Standalone manager for flamethrower effects
+   - **Methods:**
+     - `create_flamethrower(start_x, start_y, end_x, end_y, colors, widths, duration)` - Create new effect
+     - `update()` - Update all active flamethrowers and remove expired ones
+     - `draw(screen, offset_x, offset_y)` - Render all active effects with screen shake support
+     - `_draw_flamethrower()` - Internal method for drawing individual effects using circles along line
+     - `clear()` - Clear all active effects
+     - `get_count()` - Get number of active flamethrowers
+   - **Features:**
+     - Circle-based flame rendering with jitter and glow effects
+     - Configurable colors (defaults to FLAME_COLORS) and widths
+     - Screen shake offset support
+     - Automatic duration management
+     - Performance optimized with proper cleanup
+
+2. ✅ **Updated Main Game File** (`SS6.origional.py`)
+   - **Import:** Added FlamethrowerManager to universal_class imports
+   - **Global Variable:** Added flamethrower_manager to global scope
+   - **Initialization:** Added flamethrower_manager = FlamethrowerManager() in init_resources()
+   - **Reset Logic:** Added flamethrower_manager.clear() in game_loop reset
+   - **Function Update:** Modified create_flame_effect() to use flamethrower_manager.create_flamethrower()
+   - **Rendering:** Replaced old laser processing with flamethrower_manager.update() and draw()
+   - **Checkpoint Logic:** Added flamethrower_manager.get_count() to checkpoint animation checks
+   - **Cleanup:** Removed old draw_flamethrower() function (25+ lines removed)
+
+3. ✅ **Updated Shapes Level** (`levels/shapes_level.py`)
+   - **Import:** Added FlamethrowerManager to universal_class imports
+   - **Initialization:** Added self.flamethrower_manager = FlamethrowerManager() in __init__
+   - **Reset Logic:** Added self.flamethrower_manager.clear() in level reset
+   - **Click Handling:** Updated target destruction to use self.flamethrower_manager.create_flamethrower()
+   - **Rendering:** Added flamethrower update and draw calls in _update_and_draw_frame()
+   - **Checkpoint Logic:** Added flamethrower count check in checkpoint animation logic
+   - **Legacy Support:** Updated _process_lasers() to only handle non-flamethrower effects
+   - **Cleanup:** Removed old _draw_flamethrower() method (40+ lines removed)
+
+4. ✅ **Colors Level Exclusion Verified**
+   - **Confirmed:** Colors level (`levels/colors_level.py`) does not use any flamethrower effects
+   - **No Changes:** Colors level remains unchanged as requested
+   - **Verification:** Grep search confirmed no flamethrower references in colors level
+
+**Technical Implementation Details:**
+
+**FlamethrowerManager Features:**
+- **Circle-based Rendering:** Uses circles along line path for realistic flame effect
+- **Visual Effects:** Glow surfaces with alpha blending for enhanced appearance
+- **Jitter System:** Random position offsets for dynamic flame movement
+- **Color Variation:** Random color selection from configurable palette
+- **Size Variation:** Random radius changes for organic flame appearance
+- **Duration Management:** Automatic cleanup of expired effects
+- **Screen Shake Support:** Proper offset handling for screen shake effects
+
+**Integration Points:**
+- **Alphabet Level:** Uses flamethrower effects on target destruction
+- **Numbers Level:** Uses flamethrower effects on target destruction  
+- **Shapes Level:** Uses flamethrower effects on target destruction
+- **C/L Case Level:** Uses flamethrower effects on target destruction
+- **Colors Level:** EXCLUDED - No flamethrower effects used
+
+**Performance Optimizations:**
+- **Object Pooling:** Efficient flamethrower object management
+- **Automatic Cleanup:** Expired effects removed automatically
+- **Minimal Overhead:** Only processes active effects
+- **Screen Culling:** Proper offset handling for off-screen effects
+
+**Files Modified:**
+- `universal_class.py` - Added FlamethrowerManager class (120+ lines added)
+- `SS6.origional.py` - Updated imports, initialization, and effect handling
+- `levels/shapes_level.py` - Updated to use universal FlamethrowerManager
+- `history.mdc` - This log entry
+
+**Files Unchanged:**
+- `levels/colors_level.py` - Intentionally excluded from flamethrower implementation
+
+**Benefits Achieved:**
+- **Code Reusability:** Single flamethrower implementation used across multiple levels
+- **Consistency:** Uniform flame effects across all applicable levels
+- **Maintainability:** Centralized effect management for easier updates
+- **Performance:** Optimized rendering and memory management
+- **Separation of Concerns:** Effect logic separated from level-specific code
+- **Modularity:** Easy to enable/disable effects per level
+- **Future-Proof:** Framework for additional universal effects
+
+**Functionality Verification:**
+- Flamethrower effects work in Alphabet, Numbers, Shapes, and C/L Case levels
+- Colors level remains unaffected and uses no flamethrower effects
+- All visual effects maintain original quality and performance
+- Screen shake integration working properly
+- Checkpoint animations properly wait for effect completion
+- Memory management and cleanup functioning correctly
+
+## 2024-12-19 - Center Piece Separation and Universal Class Integration
+
+### Objective
+Separate the "centre piece" functionality from all levels except the "colors" level and add it to the Universal_Class for better code organization and reusability.
+
+### Analysis
+The center piece consists of:
+1. **Center Target Display**: Shows the current target (letter/number/shape) at the center of the screen with animated color transitions
+2. **Swirl Particles**: Animated particles that swirl around the center piece
+3. **Color Transitions**: Smooth color interpolation between flame colors for visual appeal
+4. **Convergence Effects**: Particles converging toward targets when hit
+
+### Implementation Plan
+1. Create `CenterPieceManager` class in `universal_class.py`
+2. Extract center piece logic from main game loop and shapes level
+3. Update all levels except colors to use the new manager
+4. Maintain backward compatibility with existing functionality
+
+### Files to Modify
+- `universal_class.py` - Add CenterPieceManager class
+- `SS6.origional.py` - Remove center piece code, use manager
+- `levels/shapes_level.py` - Remove center piece code, use manager
+- Any other levels that implement center pieces
+
+### Status: Complete
+
+### Implementation Details
+1. **Created CenterPieceManager class** in `universal_class.py`:
+   - Handles swirl particles around center
+   - Manages color transitions for center target
+   - Draws center target (text for alphabet/numbers/clcase, shapes for shapes mode)
+   - Handles particle convergence effects when targets are hit
+   - Supports both DEFAULT and QBOARD display modes
+
+2. **Updated SS6.origional.py**:
+   - Added CenterPieceManager import and initialization
+   - Replaced center piece drawing code with manager calls
+   - Removed old swirl particle functions (now legacy)
+   - Updated trigger_particle_convergence calls to use manager
+
+3. **Updated levels/shapes_level.py**:
+   - Added center_piece_manager parameter to constructor
+   - Removed duplicate swirl particle and center target methods
+   - Updated to use CenterPieceManager for all center piece functionality
+
+### Benefits
+- **Code Reusability**: Center piece logic now shared across all levels except colors
+- **Maintainability**: Single source of truth for center piece behavior
+- **Consistency**: Uniform center piece appearance and behavior across levels
+- **Performance**: Optimized particle management with proper culling and pooling
+
+### Files Modified
+- ✅ `universal_class.py` - Added CenterPieceManager class
+- ✅ `SS6.origional.py` - Integrated center piece manager, removed old code
+- ✅ `levels/shapes_level.py` - Updated to use center piece manager
+- ✅ `history.mdc` - Documented implementation

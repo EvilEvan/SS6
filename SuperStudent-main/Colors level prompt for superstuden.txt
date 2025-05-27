@@ -1,0 +1,18 @@
+Colors level prompt for superstudent:
+
+Level Name: Colors Level
+
+Core Concept: Click the target dots that match the initial "Mother Dot" color amidst a cloud of bouncing distractor dots.
+
+Gameplay Flow & Animation:
+
+    Initiation: The level begins with a large, solid-colored circle (the "Mother Dot") appearing centrally. Its color is randomly chosen from: Blue, Red, Green, Yellow, Purple, or Black.
+    Cue: The Mother Dot briefly vibrates lightly.
+    Dispersion: The Mother Dot dissipates, breaking apart into 100 smaller, circular "Dots" that begin bouncing randomly within the play area.
+    Dot Composition:
+        Target Dots (25%): 25 of the 100 dots will be the same color as the original Mother Dot.
+        Distractor Dots (75%): The remaining 75 dots will be composed of the other 5 available colors, distributed equally (15 dots of each non-target color).
+    Player Interaction:
+        Clicking a Target Dot (matching the Mother Dot) causes it to react (e.g., explode, vanish).
+        Clicking a Distractor Dot (any other color) has no effect; the dot continues bouncing unharmed.
+    Objective: The player must find and click all 25 Target Dots.
