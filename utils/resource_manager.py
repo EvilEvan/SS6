@@ -1,5 +1,5 @@
 import pygame
-from settings import FONT_SIZES
+from Display_settings import FONT_SIZES
 
 class ResourceManager:
     """Manages game resources like fonts based on display mode."""
@@ -33,7 +33,7 @@ class ResourceManager:
         
         self.large_font = pygame.font.Font(None, large_font_size)
         self.small_font = pygame.font.Font(None, font_sizes)
-        self.target_font = pygame.font.Font(None, int(font_sizes * 4))  # Large font for targets
+        self.target_font = pygame.font.Font(None, int(font_sizes * 8))  # Large font for targets (doubled from 4 to 8)
         self.title_font = pygame.font.Font(None, int(font_sizes * 8))   # Very large for titles
         
         return {

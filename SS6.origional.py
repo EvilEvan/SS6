@@ -2,11 +2,17 @@ import pygame
 import random
 import math
 from settings import (
-    COLORS_COLLISION_DELAY, DISPLAY_MODES, DEFAULT_MODE, DISPLAY_SETTINGS_PATH,
-    LEVEL_PROGRESS_PATH, MAX_CRACKS, WHITE, BLACK, FLAME_COLORS, LASER_EFFECTS,
+    COLORS_COLLISION_DELAY, LEVEL_PROGRESS_PATH, MAX_CRACKS, WHITE, BLACK, FLAME_COLORS, LASER_EFFECTS,
     LETTER_SPAWN_INTERVAL, SEQUENCES, GAME_MODES, GROUP_SIZE,
     SHAKE_DURATION_MISCLICK, SHAKE_MAGNITUDE_MISCLICK,
     GAME_OVER_CLICK_DELAY, GAME_OVER_COUNTDOWN_SECONDS
+)
+from Display_settings import (
+    DISPLAY_MODES, DEFAULT_MODE, DISPLAY_SETTINGS_PATH,
+    FONT_SIZES, MAX_PARTICLES as PARTICLES_SETTINGS,
+    MAX_EXPLOSIONS as EXPLOSIONS_SETTINGS,
+    MAX_SWIRL_PARTICLES as SWIRL_SETTINGS,
+    MOTHER_RADIUS, detect_display_type, load_display_mode, save_display_mode
 )
 from universal_class import GlassShatterManager, HUDManager, CheckpointManager, FlamethrowerManager, CenterPieceManager
 from welcome_screen import welcome_screen, level_menu, draw_neon_button
@@ -31,31 +37,11 @@ WIDTH, HEIGHT = info.current_w, info.current_h
 screen = pygame.display.set_mode((WIDTH, HEIGHT), pygame.FULLSCREEN)
 pygame.display.set_caption("Super Student")
 
-# Function to determine initial display mode based on screen size
-def detect_display_type():
-    info = pygame.display.Info()
-    screen_w, screen_h = info.current_w, info.current_h
-    
-    # If screen is larger than typical desktop monitors, assume it's a QBoard
-    if screen_w >= 1920 and screen_h >= 1080:
-        if screen_w > 2560 or screen_h > 1440:  # Larger than QHD is likely QBoard
-            return "QBOARD"
-    
-    # Default to smaller format for typical monitors/laptops
-    return "DEFAULT"
-
 # Initialize with default mode first
 DISPLAY_MODE = DEFAULT_MODE
 
-# Try to load previous display mode setting
-try:
-    with open(DISPLAY_SETTINGS_PATH, "r") as f:
-        loaded_mode = f.read().strip()
-        if loaded_mode in DISPLAY_MODES:
-            DISPLAY_MODE = loaded_mode
-except:
-    # If file doesn't exist or can't be read, use auto-detection
-    DISPLAY_MODE = detect_display_type()
+# Load display mode from settings or auto-detect
+DISPLAY_MODE = load_display_mode()
 
 # Import ResourceManager
 from utils.resource_manager import ResourceManager
@@ -78,25 +64,19 @@ def init_resources():
     global MAX_PARTICLES, MAX_EXPLOSIONS, MAX_SWIRL_PARTICLES, mother_radius
     global particle_manager, glass_shatter_manager, multi_touch_manager, hud_manager, checkpoint_manager, flamethrower_manager, center_piece_manager
     
-    # Import from settings
-    from settings import FONT_SIZES, MAX_PARTICLES as PARTICLES_SETTINGS
-    from settings import MAX_EXPLOSIONS as EXPLOSIONS_SETTINGS
-    from settings import MAX_SWIRL_PARTICLES as SWIRL_SETTINGS
-    from settings import MOTHER_RADIUS
-    
     # Get resource manager singleton
     resource_manager = ResourceManager()
     
     # Set display mode in the resource manager
     resource_manager.set_display_mode(DISPLAY_MODE)
     
-    # Initialize mode-specific settings from settings.py
+    # Initialize mode-specific settings from Display_settings.py
     MAX_PARTICLES = PARTICLES_SETTINGS[DISPLAY_MODE]
     MAX_EXPLOSIONS = EXPLOSIONS_SETTINGS[DISPLAY_MODE]
     MAX_SWIRL_PARTICLES = SWIRL_SETTINGS[DISPLAY_MODE]
     mother_radius = MOTHER_RADIUS[DISPLAY_MODE]
     
-    # Initialize font sizes from settings
+    # Initialize font sizes from Display_settings
     font_sizes = FONT_SIZES[DISPLAY_MODE]["regular"]
     
     # Get core resources
@@ -132,11 +112,7 @@ def init_resources():
     center_piece_manager = CenterPieceManager(WIDTH, HEIGHT, DISPLAY_MODE, particle_manager, MAX_SWIRL_PARTICLES)
     
     # Save display mode preference
-    try:
-        with open(DISPLAY_SETTINGS_PATH, "w") as f:
-            f.write(DISPLAY_MODE)
-    except:
-        pass  # If can't write, silently continue
+    save_display_mode(DISPLAY_MODE)
     
     print(f"Resources initialized for display mode: {DISPLAY_MODE}")
     
@@ -495,7 +471,7 @@ def game_loop(mode):
                         "x": random.randint(50, WIDTH - 50),
                         "y": -50,
                         "rect": pygame.Rect(0, 0, 0, 0), # Will be updated when drawn
-                        "size": 120,  # fixed size (used for shapes, could be used for text bounding box approx)
+                        "size": 240,  # fixed size (doubled from 120 to 240 for 100% increase)
                         "dx": random.choice([-1, -0.5, 0.5, 1]) * 1.5, # Slightly faster horizontal drift
                         "dy": random.choice([1, 1.5]) * 1.5, # Slightly faster fall speed
                         "can_bounce": False, # Start without bouncing

@@ -287,7 +287,7 @@ class ShapesLevel:
                     "x": random.randint(50, self.width - 50),
                     "y": -50,
                     "rect": pygame.Rect(0, 0, 0, 0),  # Will be updated when drawn
-                    "size": 120,
+                    "size": 240,  # doubled from 120 to 240 for 100% increase
                     "dx": random.choice([-1, -0.5, 0.5, 1]) * 1.5,
                     "dy": random.choice([1, 1.5]) * 1.5,
                     "can_bounce": False,

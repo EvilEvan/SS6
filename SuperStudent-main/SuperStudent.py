@@ -46,7 +46,7 @@ font_sizes = [260, 270, 280, 290, 210]
 fonts = [pygame.font.Font(None, size) for size in font_sizes]
 large_font = pygame.font.Font(None, 300)  # for watermark or big target display
 small_font = pygame.font.Font(None, 36)
-TARGET_FONT = pygame.font.Font(None, 420)  # new font for falling targets (200% bigger)
+TARGET_FONT = pygame.font.Font(None, 840)  # new font for falling targets (doubled from 420 to 840 for 100% increase)
 TITLE_FONT = pygame.font.Font(None, 640)  # Define a new title font (300% bigger than before based on fonts[2])
 
 # Game constants
@@ -791,7 +791,7 @@ def game_loop(mode):
                         "x": random.randint(50, WIDTH - 50),
                         "y": -50,
                         "rect": pygame.Rect(0, 0, 0, 0), # Will be updated when drawn
-                        "size": 120,  # fixed size (used for shapes, could be used for text bounding box approx)
+                        "size": 240,  # fixed size (doubled from 120 to 240 for 100% increase)
                         "dx": random.choice([-1, -0.5, 0.5, 1]) * 1.5, # Slightly faster horizontal drift
                         "dy": random.choice([1, 1.5]) * 1.5, # Slightly faster fall speed
                         "can_bounce": False, # Start without bouncing

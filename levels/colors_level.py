@@ -217,8 +217,8 @@ class ColorsLevel:
             y = int(center[1] + math.sin(p["angle"]) * p["radius"])
             x += random.randint(-20, 20)
             y += random.randint(-20, 20)
-            x = max(24, min(self.width - 24, x))
-            y = max(24, min(self.height - 24, y))
+            x = max(48, min(self.width - 48, x))
+            y = max(48, min(self.height - 48, y))
             initial_positions.append((x, y))
             
         # Create dots with positions
@@ -231,7 +231,7 @@ class ColorsLevel:
                 "x": x, "y": y,
                 "dx": dx, "dy": dy,
                 "color": color,
-                "radius": 24,
+                "radius": 48,
                 "target": True if color == self.mother_color else False,
                 "alive": True,
             })
@@ -245,7 +245,7 @@ class ColorsLevel:
                 p["radius"] += p["speed"]
                 x = int(center[0] + math.cos(p["angle"]) * p["radius"])
                 y = int(center[1] + math.sin(p["angle"]) * p["radius"])
-                pygame.draw.circle(self.screen, p["color"], (x, y), 24)
+                pygame.draw.circle(self.screen, p["color"], (x, y), 48)
                 
             pygame.display.flip()
             clock.tick(50)
@@ -581,7 +581,7 @@ class ColorsLevel:
         )
         
         # Show sample target dot reference at top right
-        self.hud_manager.display_sample_target(self.screen, self.mother_color, 24)
+        self.hud_manager.display_sample_target(self.screen, self.mother_color, 48)
         
         # Display collision status
         self.hud_manager.display_collision_status(
@@ -675,13 +675,13 @@ class ColorsLevel:
             valid_position = False
             
             for _ in range(max_attempts):
-                x = random.randint(50, self.width - 50)
-                y = random.randint(50, self.height - 50)
+                x = random.randint(100, self.width - 100)
+                y = random.randint(100, self.height - 100)
                 
                 valid_position = True
                 for existing_dot in self.dots:
                     distance = math.hypot(x - existing_dot["x"], y - existing_dot["y"])
-                    if distance < 50:
+                    if distance < 100:
                         valid_position = False
                         break
                         
@@ -704,7 +704,7 @@ class ColorsLevel:
                 "x": x, "y": y,
                 "dx": dx, "dy": dy,
                 "color": color,
-                "radius": 24,
+                "radius": 48,
                 "target": is_target,
                 "alive": True,
             })
