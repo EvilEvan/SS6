@@ -2,9 +2,8 @@ import pygame
 import random
 import math
 from settings import (
-    MAX_CRACKS, WHITE, BLACK, FLAME_COLORS,
-    SHAKE_DURATION_MISCLICK, SHAKE_MAGNITUDE_MISCLICK,
-    GAME_OVER_DELAY_FRAMES
+    WHITE, BLACK, FLAME_COLORS,
+    SHAKE_DURATION_MISCLICK, SHAKE_MAGNITUDE_MISCLICK
 )
 
 class MultiTouchManager:
@@ -137,7 +136,7 @@ class MultiTouchManager:
 class GlassShatterManager:
     """
     Universal class to manage glass shatter effects and prevent duplicate events.
-    Handles crack creation, drawing, background switching, and game over triggering.
+    Handles crack creation, drawing, background switching, and screen refresh.
     """
     
     def __init__(self, width, height, particle_manager=None):
@@ -163,9 +162,9 @@ class GlassShatterManager:
         self.current_background = WHITE
         self.opposite_background = BLACK
         
-        # Game over state
-        self.game_over_triggered = False
-        self.game_over_delay = 0
+        # Screen refresh state (30 seconds at 50 fps = 1500 frames)
+        self.refresh_timer = 1500
+        self.refresh_interval = 1500  # 30 seconds
         
         # Screen shake state
         self.shake_duration = 0
@@ -181,8 +180,7 @@ class GlassShatterManager:
         self.glass_cracks = []
         self.background_shattered = False
         self.shatter_timer = 0
-        self.game_over_triggered = False
-        self.game_over_delay = 0
+        self.refresh_timer = self.refresh_interval
         self.shake_duration = 0
         self.shake_magnitude = 0
         self._processing_shatter = False
@@ -214,46 +212,45 @@ class GlassShatterManager:
         # Create crack at click position
         self._create_crack(x, y)
         
+        # Check if we should trigger shatter effect (visual only, no game over)
+        if len(self.glass_cracks) >= 10:  # Hardcoded since MAX_CRACKS will be removed
+            self._trigger_shatter()
+            
     def _create_crack(self, x, y):
         """
-        Creates a crack effect at the given position.
-        Internal method to prevent external duplicate calls.
+        Create a crack at the specified position with realistic branching.
         
         Args:
-            x (int): X coordinate for crack origin
-            y (int): Y coordinate for crack origin
+            x (int): X coordinate for crack center
+            y (int): Y coordinate for crack center
         """
-        # Prevent multiple simultaneous shatter events
-        if self._processing_shatter:
-            return
-            
-        # Create a new crack with random properties
-        segments = random.randint(4, 8)  # Number of line segments in the crack
-        length = random.randint(40, 80)  # Length of each segment
-        spread_angle = random.uniform(10, 40)  # Max deviation angle between segments
+        # Create main crack line with multiple segments for realistic look
+        segments = random.randint(3, 6)
+        length = random.uniform(80, 150)
+        spread_angle = 30  # Maximum angle deviation between segments
         
-        # Start with a random direction
-        main_angle = random.uniform(0, 360)
+        # Random starting direction
+        current_angle = random.uniform(0, 360)
         
-        # Generate crack segments
-        points = [(x, y)]  # Start point
-        current_angle = main_angle
+        # Generate main crack segments
+        points = [(x, y)]  # Start at click position
         
-        for _ in range(segments):
-            # Vary the angle slightly
+        for i in range(segments):
+            # Add some randomness to direction
             angle_variation = random.uniform(-spread_angle, spread_angle)
             current_angle += angle_variation
             
             # Calculate next point
             rad_angle = math.radians(current_angle)
-            segment_length = random.uniform(0.7, 1.3) * length
+            segment_length = length / segments * random.uniform(0.7, 1.3)  # Vary segment length
             next_x = points[-1][0] + math.cos(rad_angle) * segment_length
             next_y = points[-1][1] + math.sin(rad_angle) * segment_length
             
             points.append((next_x, next_y))
         
-        # Add thin branches occasionally
+        # Create branches
         branch_points = []
+        
         if random.random() < 0.7:  # 70% chance to add branches
             num_branches = random.randint(1, 3)
             
@@ -290,18 +287,14 @@ class GlassShatterManager:
             "alpha": 200,  # Starting opacity
             "color": draw_crack_color
         })
-        
-        # Check if we've reached the maximum number of cracks to shatter
-        if len(self.glass_cracks) >= MAX_CRACKS and not self.game_over_triggered:
-            self._trigger_shatter()
             
     def _trigger_shatter(self):
         """
-        Triggers the screen shatter effect.
+        Triggers the screen shatter effect (visual only).
         Internal method with duplicate prevention.
         """
         # Prevent multiple simultaneous shatter events
-        if self._processing_shatter or self.game_over_triggered:
+        if self._processing_shatter:
             return
             
         self._processing_shatter = True
@@ -312,10 +305,6 @@ class GlassShatterManager:
         
         # Swap current and opposite backgrounds
         self.current_background, self.opposite_background = self.opposite_background, self.current_background
-        
-        # Set flag for game over but with delay to show animation first
-        self.game_over_triggered = True
-        self.game_over_delay = GAME_OVER_DELAY_FRAMES
         
         # Create shatter particles if particle manager is available
         if self.particle_manager:
@@ -360,9 +349,32 @@ class GlassShatterManager:
                 # Switch the background colors back
                 self.current_background, self.opposite_background = self.opposite_background, self.current_background
                 
-        # Update game over delay
-        if self.game_over_triggered and self.game_over_delay > 0:
-            self.game_over_delay -= 1
+        # Update screen refresh timer
+        self.refresh_timer -= 1
+        if self.refresh_timer <= 0:
+            # Clear all cracks and reset timer
+            self.glass_cracks = []
+            self.refresh_timer = self.refresh_interval
+            
+            # Create refresh particle effect if particle manager is available
+            if self.particle_manager:
+                self._create_refresh_particles()
+                
+    def _create_refresh_particles(self):
+        """Create particle effect when screen refreshes."""
+        refresh_count = 50
+        for _ in range(refresh_count):
+            # Create sparkle particles across the screen
+            x = random.uniform(0, self.width)
+            y = random.uniform(0, self.height)
+            self.particle_manager.create_particle(
+                x, y,
+                (255, 255, 255),  # White sparkles
+                random.uniform(3, 8),  # Size
+                random.uniform(-1, 1),  # X velocity
+                random.uniform(-1, 1),  # Y velocity
+                random.randint(30, 60)  # Duration
+            )
             
     def get_screen_shake_offset(self):
         """
@@ -422,24 +434,6 @@ class GlassShatterManager:
                         int(crack["width"] * 0.7)  # Branches are thinner
                     )
                     
-    def is_game_over_ready(self):
-        """
-        Check if the game over screen should be shown.
-        
-        Returns:
-            bool: True if game over delay has expired and game over was triggered
-        """
-        return self.game_over_triggered and self.game_over_delay <= 0
-        
-    def is_game_over_triggered(self):
-        """
-        Check if game over has been triggered (regardless of delay).
-        
-        Returns:
-            bool: True if game over has been triggered
-        """
-        return self.game_over_triggered
-        
     def handle_event(self, event):
         """
         Handle pygame events related to glass shatter.
@@ -460,6 +454,15 @@ class GlassShatterManager:
             int: Number of cracks currently on screen
         """
         return len(self.glass_cracks)
+        
+    def get_refresh_time_remaining(self):
+        """
+        Get the time remaining until next screen refresh.
+        
+        Returns:
+            int: Frames remaining until refresh
+        """
+        return self.refresh_timer
         
     def set_background_colors(self, current, opposite):
         """
@@ -609,6 +612,23 @@ class HUDManager:
         
         pygame.draw.circle(screen, target_color, (sample_x, sample_y), target_radius)
         pygame.draw.rect(screen, WHITE, (sample_x - 30, sample_y - 30, 60, 60), 2)
+        
+    def display_screen_refresh_timer(self, screen):
+        """
+        Display the screen refresh timer showing time until cracks are cleared.
+        
+        Args:
+            screen: Pygame surface to draw on
+        """
+        text_color = BLACK if self.glass_shatter_manager.get_background_color() == WHITE else WHITE
+        refresh_frames = self.glass_shatter_manager.get_refresh_time_remaining()
+        refresh_seconds = refresh_frames // 50  # Convert frames to seconds (50 fps)
+        
+        # Display refresh timer at bottom center
+        refresh_text = f"Screen refresh in: {refresh_seconds}s"
+        refresh_surface = self.small_font.render(refresh_text, True, text_color)
+        refresh_rect = refresh_surface.get_rect(center=(self.width // 2, self.height - 30))
+        screen.blit(refresh_surface, refresh_rect)
 
 class CheckpointManager:
     """
@@ -962,7 +982,7 @@ class CenterPieceManager:
     Handles center target display, swirl particles, color transitions, and convergence effects.
     """
     
-    def __init__(self, width, height, display_mode, particle_manager, max_swirl_particles=50):
+    def __init__(self, width, height, display_mode, particle_manager, max_swirl_particles=50, resource_manager=None):
         """
         Initialize the center piece manager.
         
@@ -972,12 +992,14 @@ class CenterPieceManager:
             display_mode (str): Current display mode ("DEFAULT" or "QBOARD")
             particle_manager: Reference to particle manager for effects
             max_swirl_particles (int): Maximum number of swirl particles
+            resource_manager: Reference to ResourceManager for cached fonts
         """
         self.width = width
         self.height = height
         self.display_mode = display_mode
         self.particle_manager = particle_manager
         self.max_swirl_particles = max_swirl_particles
+        self.resource_manager = resource_manager
         
         # Center position
         self.player_x = width // 2
@@ -988,7 +1010,7 @@ class CenterPieceManager:
         self.player_current_color = FLAME_COLORS[0]
         self.player_next_color = FLAME_COLORS[1]
         
-        # Swirl particles
+        # Swirl particles - reduce count for QBoard performance
         self.swirl_particles = []
         
         # Convergence state
@@ -1045,12 +1067,13 @@ class CenterPieceManager:
             
     def _create_swirl_particles(self, radius=None, count=None):
         """Create particles that swirl around the center point."""
-        # Set default values based on display mode
+        # Set default values based on display mode - REDUCED FOR QBOARD PERFORMANCE
         if radius is None:
-            radius = 150 if self.display_mode == "QBOARD" else 80
+            radius = 120 if self.display_mode == "QBOARD" else 80  # Reduced from 150
         
         if count is None:
-            count = 50 if self.display_mode == "QBOARD" else 30
+            # PERFORMANCE: Significantly reduce particle count for QBoard
+            count = 15 if self.display_mode == "QBOARD" else 30  # Reduced from 50/30
         
         # Limit count to max_swirl_particles
         count = min(count, self.max_swirl_particles)
@@ -1073,9 +1096,13 @@ class CenterPieceManager:
             
     def _update_swirl_particles(self):
         """Update swirling particles, handle convergence."""
+        # PERFORMANCE: Reduce particle regeneration frequency for QBoard
+        regeneration_chance = 0.05 if self.display_mode == "QBOARD" else 0.1
+        min_particles = 10 if self.display_mode == "QBOARD" else 20
+        
         # Add occasional new particles if count is low
-        if len(self.swirl_particles) < 30 and random.random() < 0.1:
-            self._create_swirl_particles(count=10)  # Add a few more
+        if len(self.swirl_particles) < min_particles and random.random() < regeneration_chance:
+            self._create_swirl_particles(count=5)  # Add fewer particles
 
         current_time_ms = pygame.time.get_ticks()  # Use milliseconds for smoother pulsing
         particles_to_remove = []
@@ -1113,8 +1140,9 @@ class CenterPieceManager:
                 if particle in self.swirl_particles:  # Ensure it wasn't already removed
                     self.swirl_particles.remove(particle)
 
-                # Create mini-explosion effect at convergence point
-                for _ in range(3):  # Fewer particles per mini-explosion
+                # PERFORMANCE: Reduce explosion particles for QBoard
+                explosion_particles = 2 if self.display_mode == "QBOARD" else 3
+                for _ in range(explosion_particles):
                     explosion_color = particle["color"]
                     self.particle_manager.create_particle(
                         target_x + random.uniform(-5, 5),  # Slight spread
@@ -1133,11 +1161,15 @@ class CenterPieceManager:
                 self.particles_converging = False
                 self.convergence_target = None
                 # Optionally regenerate particles if too few remain
-                if len(self.swirl_particles) < 20:
-                    self._create_swirl_particles(count=30)  # Regenerate some
+                if len(self.swirl_particles) < min_particles:
+                    regenerate_count = 15 if self.display_mode == "QBOARD" else 30
+                    self._create_swirl_particles(count=regenerate_count)
                     
     def _draw_swirl_particles(self, screen, offset_x=0, offset_y=0):
         """Draw swirling particles around the center."""
+        # PERFORMANCE: Simplify glow effects for QBoard
+        use_glow = self.display_mode == "DEFAULT"
+        
         for particle in self.swirl_particles:
             # Calculate particle position
             x = self.player_x + particle["distance"] * math.cos(particle["angle"])
@@ -1147,17 +1179,18 @@ class CenterPieceManager:
             draw_x = int(x + offset_x)
             draw_y = int(y + offset_y)
 
-            # Draw particle with glow effect
-            glow_radius = particle["radius"] * 1.5
-            glow_surface = pygame.Surface((glow_radius*2, glow_radius*2), pygame.SRCALPHA)
-            pygame.draw.circle(glow_surface, (*particle["color"], 60), (glow_radius, glow_radius), glow_radius)
-            screen.blit(glow_surface, (draw_x - glow_radius, draw_y - glow_radius))
+            # Draw particle with optional glow effect
+            if use_glow:
+                glow_radius = particle["radius"] * 1.5
+                glow_surface = pygame.Surface((glow_radius*2, glow_radius*2), pygame.SRCALPHA)
+                pygame.draw.circle(glow_surface, (*particle["color"], 60), (glow_radius, glow_radius), glow_radius)
+                screen.blit(glow_surface, (draw_x - glow_radius, draw_y - glow_radius))
 
             # Draw main particle
             pygame.draw.circle(screen, particle["color"], (draw_x, draw_y), particle["radius"])
             
     def _draw_center_target(self, screen, target_letter, mode, offset_x=0, offset_y=0):
-        """Draw the center target display."""
+        """Draw the center target display using cached fonts for performance."""
         if not target_letter:
             return
             
@@ -1172,8 +1205,8 @@ class CenterPieceManager:
             # Draw the center target display as a shape outline
             self._draw_shape_target(screen, target_letter, center_x, center_y)
         else:
-            # Draw text target for Alphabet, Numbers, C/L Case
-            self._draw_text_target(screen, target_letter, mode, center_x, center_y)
+            # Draw text target for Alphabet, Numbers, C/L Case using cached fonts
+            self._draw_text_target_cached(screen, target_letter, mode, center_x, center_y)
             
     def _update_color_transition(self):
         """Update smooth color transition for the center target."""
@@ -1197,10 +1230,25 @@ class CenterPieceManager:
                 self.player_next_color[2] * self.player_color_transition)
         return (r, g, b)
         
-    def _draw_text_target(self, screen, target_letter, mode, center_x, center_y):
-        """Draw text-based center target."""
+    def _draw_text_target_cached(self, screen, target_letter, mode, center_x, center_y):
+        """Draw text-based center target using cached font surfaces for performance."""
         center_target_color = self._get_interpolated_color()
         
+        # PERFORMANCE OPTIMIZATION: Use cached font surface if available
+        if self.resource_manager:
+            try:
+                cached_surface = self.resource_manager.get_center_target_surface(mode, target_letter, center_target_color)
+                surface_rect = cached_surface.get_rect(center=(center_x, center_y))
+                screen.blit(cached_surface, surface_rect)
+                return
+            except:
+                pass  # Fall back to original rendering if cache fails
+        
+        # Fallback: Original rendering method
+        self._draw_text_target_fallback(screen, target_letter, mode, center_x, center_y, center_target_color)
+        
+    def _draw_text_target_fallback(self, screen, target_letter, mode, center_x, center_y, center_target_color):
+        """Fallback text rendering method (original implementation)."""
         # Create font (size 900 as in original)
         player_font = pygame.font.Font(None, 900)
         display_char = target_letter  # default

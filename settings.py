@@ -3,7 +3,6 @@
 # Game settings
 COLORS_COLLISION_DELAY = 250
 LEVEL_PROGRESS_PATH = "level_progress.txt"
-MAX_CRACKS = 10
 WHITE = (255, 255, 255)
 BLACK = (0, 0, 0)
 FLAME_COLORS = [
@@ -27,6 +26,3 @@ GAME_MODES = ['alphabet', 'numbers', 'clcase', 'shapes', 'colors']
 GROUP_SIZE = 5
 SHAKE_DURATION_MISCLICK = 10
 SHAKE_MAGNITUDE_MISCLICK = 5
-GAME_OVER_CLICK_DELAY = 300
-GAME_OVER_COUNTDOWN_SECONDS = 5
-GAME_OVER_DELAY_FRAMES = 60  # Number of frames to wait before showing game over

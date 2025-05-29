@@ -5,6 +5,7 @@ from settings import (
     SEQUENCES, GROUP_SIZE, LETTER_SPAWN_INTERVAL, FLAME_COLORS,
     LEVEL_PROGRESS_PATH, WHITE, BLACK
 )
+from Display_settings import PERFORMANCE_SETTINGS
 from universal_class import GlassShatterManager, HUDManager, MultiTouchManager, CheckpointManager, FlamethrowerManager
 
 
@@ -153,16 +154,6 @@ class ShapesLevel:
             if not self._handle_events():
                 return False
                 
-            # Handle glass shatter game over
-            if self.glass_shatter_manager.is_game_over_ready():
-                self.game_started = False
-                if self._show_game_over_screen():
-                    self.running = False
-                    break
-                else:
-                    self.running = False
-                    break
-            
             # Spawning items
             if self.game_started:
                 self._spawn_items()
@@ -319,8 +310,10 @@ class ShapesLevel:
         # Update and draw falling shapes
         self._update_and_draw_shapes(offset_x, offset_y)
         
-        # Handle collisions between shapes
-        self._handle_shape_collisions()
+        # Handle collisions between shapes with performance optimization
+        collision_frequency = PERFORMANCE_SETTINGS.get(self.center_piece_manager.display_mode, PERFORMANCE_SETTINGS["DEFAULT"])["collision_check_frequency"]
+        if self.frame_count % collision_frequency == 0:
+            self._handle_shape_collisions()
         
         # Process flamethrower effects
         self.flamethrower_manager.update()
@@ -589,9 +582,5 @@ class ShapesLevel:
                         return False  # Return to menu
                         
         return None  # Continue normal gameplay
-        
-    def _show_game_over_screen(self):
-        """Show the game over screen."""
-        return self.game_over_screen()
         
     # Swirl particle methods now handled by CenterPieceManager 

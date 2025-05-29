@@ -38,12 +38,30 @@ MAX_EXPLOSIONS = {
 
 MAX_SWIRL_PARTICLES = {
     "DEFAULT": 30,
-    "QBOARD": 50
+    "QBOARD": 15
 }
 
 MOTHER_RADIUS = {
     "DEFAULT": 90,
     "QBOARD": 120
+}
+
+# Performance optimization settings for QBoard
+PERFORMANCE_SETTINGS = {
+    "DEFAULT": {
+        "collision_check_frequency": 1,  # Check collisions every frame
+        "particle_glow_effects": True,
+        "charge_up_particles": 150,
+        "swirl_particle_regeneration": 0.1,
+        "explosion_particles_per_hit": 3
+    },
+    "QBOARD": {
+        "collision_check_frequency": 2,  # Check collisions every 2 frames
+        "particle_glow_effects": False,  # Disable glow effects
+        "charge_up_particles": 75,       # Reduce charge-up particles
+        "swirl_particle_regeneration": 0.05,  # Reduce regeneration frequency
+        "explosion_particles_per_hit": 2     # Fewer explosion particles
+    }
 }
 
 # Debug settings
@@ -185,6 +203,15 @@ class DisplayModeSelector:
         
         title_font_size = int(320 * self.scale_factor)
         self.title_font = pygame.font.Font(None, title_font_size)
+        
+        # Cache for title rendering to improve performance
+        self.title_cache = {}
+        self.last_title_color = None
+        
+        # Pre-render static text surfaces
+        self.instruction_surface = self.small_font.render("Choose Display Size:", True, (255, 255, 255))
+        self.default_surface = self.small_font.render("Default", True, (255, 255, 255))
+        self.qboard_surface = self.small_font.render("QBoard", True, (255, 255, 255))
     
     def _create_particles(self):
         """Create dynamic gravitational particles that orbit around the title."""
@@ -196,8 +223,12 @@ class DisplayModeSelector:
             (0, 128, 255)    # Bright blue
         ]
         
+        # Adjust particle count based on display mode for performance
+        display_mode = load_display_mode()
+        particle_count = 60 if display_mode == "QBOARD" else 120  # Reduced for QBoard
+        
         particles = []
-        for _ in range(120):
+        for _ in range(particle_count):
             angle = random.uniform(0, math.pi * 2)
             distance = random.uniform(200, max(self.WIDTH, self.HEIGHT) * 0.4)
             x = self.WIDTH // 2 + math.cos(angle) * distance
@@ -294,55 +325,71 @@ class DisplayModeSelector:
                              int(particle["size"]))
     
     def draw_title(self, title_color):
-        """Draw the main title with 3D effects."""
+        """Draw the main title with 3D effects (optimized with caching)."""
         title_text = "Super Student"
         title_rect_center = (self.WIDTH // 2, self.HEIGHT // 2 - self.title_offset + self.title_offset_y)
         
-        # Draw shadow
-        shadow_color = (20, 20, 20)
-        shadow = self.title_font.render(title_text, True, shadow_color)
-        shadow_rect = shadow.get_rect(center=(title_rect_center[0] + 1, title_rect_center[1] + 1))
-        self.screen.blit(shadow, shadow_rect)
+        # Check if we need to re-render (color changed significantly)
+        color_key = (title_color[0] // 10, title_color[1] // 10, title_color[2] // 10)  # Quantize color
         
-        # Add dynamic glow based on title color
-        r, g, b = title_color
-        glow_colors = [(r//2, g//2, b//2), (r//3, g//3, b//3)]
-        for i, glow_color in enumerate(glow_colors):
-            glow = self.title_font.render(title_text, True, glow_color)
-            offset = i + 1
-            for dx, dy in [(-offset,0), (offset,0), (0,-offset), (0,offset)]:
-                glow_rect = glow.get_rect(center=(title_rect_center[0] + dx, title_rect_center[1] + dy))
-                self.screen.blit(glow, glow_rect)
+        if color_key not in self.title_cache or self.last_title_color != color_key:
+            # Clear old cache if it gets too large
+            if len(self.title_cache) > 10:
+                self.title_cache.clear()
+            
+            r, g, b = title_color
+            
+            # Pre-render all title variations
+            shadow_color = (20, 20, 20)
+            highlight_color = (min(r+80, 255), min(g+80, 255), min(b+80, 255))
+            shadow_color_3d = (max(r-90, 0), max(g-90, 0), max(b-90, 0))
+            mid_color = (max(r-40, 0), max(g-40, 0), max(b-40, 0))
+            glow_colors = [(r//2, g//2, b//2), (r//3, g//3, b//3)]
+            
+            self.title_cache[color_key] = {
+                'shadow': self.title_font.render(title_text, True, shadow_color),
+                'highlight': self.title_font.render(title_text, True, highlight_color),
+                'mid_tone': self.title_font.render(title_text, True, mid_color),
+                'inner_shadow': self.title_font.render(title_text, True, shadow_color_3d),
+                'main': self.title_font.render(title_text, True, title_color),
+                'glow1': self.title_font.render(title_text, True, glow_colors[0]),
+                'glow2': self.title_font.render(title_text, True, glow_colors[1])
+            }
+            self.last_title_color = color_key
+        
+        # Use cached surfaces
+        cached_title = self.title_cache[color_key]
+        
+        # Draw shadow
+        shadow_rect = cached_title['shadow'].get_rect(center=(title_rect_center[0] + 1, title_rect_center[1] + 1))
+        self.screen.blit(cached_title['shadow'], shadow_rect)
+        
+        # Add dynamic glow (simplified - only 2 glow layers instead of 8)
+        glow_rect = cached_title['glow1'].get_rect(center=(title_rect_center[0] - 1, title_rect_center[1] - 1))
+        self.screen.blit(cached_title['glow1'], glow_rect)
+        glow_rect = cached_title['glow1'].get_rect(center=(title_rect_center[0] + 1, title_rect_center[1] + 1))
+        self.screen.blit(cached_title['glow1'], glow_rect)
         
         # Create the 3D effect with highlight and shadow
-        highlight_color = (min(r+80, 255), min(g+80, 255), min(b+80, 255))
-        shadow_color = (max(r-90, 0), max(g-90, 0), max(b-90, 0))
-        mid_color = (max(r-40, 0), max(g-40, 0), max(b-40, 0))
+        highlight_rect = cached_title['highlight'].get_rect(center=(title_rect_center[0] - 4, title_rect_center[1] - 4))
+        self.screen.blit(cached_title['highlight'], highlight_rect)
         
-        highlight = self.title_font.render(title_text, True, highlight_color)
-        highlight_rect = highlight.get_rect(center=(title_rect_center[0] - 4, title_rect_center[1] - 4))
-        self.screen.blit(highlight, highlight_rect)
+        mid_rect = cached_title['mid_tone'].get_rect(center=(title_rect_center[0] + 2, title_rect_center[1] + 2))
+        self.screen.blit(cached_title['mid_tone'], mid_rect)
         
-        mid_tone = self.title_font.render(title_text, True, mid_color)
-        mid_rect = mid_tone.get_rect(center=(title_rect_center[0] + 2, title_rect_center[1] + 2))
-        self.screen.blit(mid_tone, mid_rect)
+        inner_shadow_rect = cached_title['inner_shadow'].get_rect(center=(title_rect_center[0] + 4, title_rect_center[1] + 4))
+        self.screen.blit(cached_title['inner_shadow'], inner_shadow_rect)
         
-        inner_shadow = self.title_font.render(title_text, True, shadow_color)
-        inner_shadow_rect = inner_shadow.get_rect(center=(title_rect_center[0] + 4, title_rect_center[1] + 4))
-        self.screen.blit(inner_shadow, inner_shadow_rect)
-        
-        title = self.title_font.render(title_text, True, title_color)
-        title_rect = title.get_rect(center=title_rect_center)
-        self.screen.blit(title, title_rect)
+        title_rect = cached_title['main'].get_rect(center=title_rect_center)
+        self.screen.blit(cached_title['main'], title_rect)
     
     def draw_instructions(self):
-        """Draw instruction text."""
-        display_text = self.small_font.render("Choose Display Size:", True, (255, 255, 255))
-        display_rect = display_text.get_rect(center=(self.WIDTH // 2, self.HEIGHT // 2 + self.instruction_y_pos))
-        self.screen.blit(display_text, display_rect)
+        """Draw instruction text (optimized with pre-rendered surface)."""
+        display_rect = self.instruction_surface.get_rect(center=(self.WIDTH // 2, self.HEIGHT // 2 + self.instruction_y_pos))
+        self.screen.blit(self.instruction_surface, display_rect)
     
     def draw_buttons(self, default_hover, qboard_hover):
-        """Draw display mode selection buttons."""
+        """Draw display mode selection buttons (optimized with pre-rendered surfaces)."""
         # Draw default button with hover effect
         pygame.draw.rect(self.screen, (20, 20, 20), self.default_button)
         glow_intensity = 6 if default_hover else 5
@@ -355,9 +402,8 @@ class DisplayModeSelector:
             pygame.draw.rect(self.screen, glow_color, default_rect, 1)
         border_width = 3 if default_hover else 2
         pygame.draw.rect(self.screen, (0, 200, 255), self.default_button, border_width)
-        default_text = self.small_font.render("Default", True, (255, 255, 255))
-        default_text_rect = default_text.get_rect(center=self.default_button.center)
-        self.screen.blit(default_text, default_text_rect)
+        default_text_rect = self.default_surface.get_rect(center=self.default_button.center)
+        self.screen.blit(self.default_surface, default_text_rect)
         
         # Draw QBoard button with hover effect
         pygame.draw.rect(self.screen, (20, 20, 20), self.qboard_button)
@@ -371,9 +417,8 @@ class DisplayModeSelector:
             pygame.draw.rect(self.screen, glow_color, qboard_rect, 1)
         border_width = 3 if qboard_hover else 2
         pygame.draw.rect(self.screen, (255, 0, 150), self.qboard_button, border_width)
-        qboard_text = self.small_font.render("QBoard", True, (255, 255, 255))
-        qboard_text_rect = qboard_text.get_rect(center=self.qboard_button.center)
-        self.screen.blit(qboard_text, qboard_text_rect)
+        qboard_text_rect = self.qboard_surface.get_rect(center=self.qboard_button.center)
+        self.screen.blit(self.qboard_surface, qboard_text_rect)
     
     def draw_auto_detected_indicator(self, current_time, default_hover, qboard_hover):
         """Draw auto-detected mode indicator."""

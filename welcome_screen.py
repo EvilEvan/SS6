@@ -12,6 +12,13 @@ def level_menu(WIDTH, HEIGHT, screen, small_font):
     """Display the Level Options screen to choose the mission using a cyberpunk neon display."""
     running = True
     clock = pygame.time.Clock()
+    
+    # Load display mode to adjust particle count
+    display_mode = load_display_mode()
+    
+    # Adjust particle count based on display mode for performance
+    particle_count = 200 if display_mode == "QBOARD" else 400  # Reduced from 700
+    
     # Button dimensions and positions (arranged in two rows)
     button_width = 300
     button_height = 80
@@ -35,9 +42,9 @@ def level_menu(WIDTH, HEIGHT, screen, small_font):
         (0, 128, 255)    # Bright blue
     ]
 
-    # Create OUTWARD moving particles (reverse of welcome screen)
+    # Create OUTWARD moving particles (optimized count)
     repel_particles = []
-    for _ in range(700):
+    for _ in range(particle_count):
         # Start particles near center
         angle = random.uniform(0, math.pi * 2)
         distance = random.uniform(10, 100)  # Close to center
@@ -51,6 +58,14 @@ def level_menu(WIDTH, HEIGHT, screen, small_font):
             "speed": random.uniform(3.0, 6.0),
             "angle": angle  # Store the angle for outward movement
         })
+
+    # Pre-render static text surfaces for better performance
+    title_surface = small_font.render("Choose Mission:", True, WHITE)
+    abc_surface = small_font.render("A B C", True, WHITE)
+    num_surface = small_font.render("1 2 3", True, WHITE)
+    shapes_surface = small_font.render("Shapes", True, WHITE)
+    clcase_surface = small_font.render("C/L Case", True, WHITE)
+    colors_surface = small_font.render("Colors", True, WHITE)
 
     # Brief delay so that time-based effects start smoothly
     pygame.time.delay(100)
@@ -75,7 +90,7 @@ def level_menu(WIDTH, HEIGHT, screen, small_font):
                 elif colors_rect.collidepoint(mx, my):  # Handle Colors button click
                     return "colors"
 
-        # Draw the outward moving particles
+        # Draw the outward moving particles (optimized)
         for particle in repel_particles:
             # Move particles AWAY from center
             particle["x"] += math.cos(particle["angle"]) * particle["speed"]
@@ -110,43 +125,41 @@ def level_menu(WIDTH, HEIGHT, screen, small_font):
         b = int(current_color[2] * (1 - color_transition) + next_color[2] * color_transition)
         title_color = (r, g, b)
 
-        # Draw title
-        title_text = small_font.render("Choose Mission:", True, title_color)
-        title_rect = title_text.get_rect(center=(WIDTH // 2, HEIGHT // 2 - 150))
-        screen.blit(title_text, title_rect)
+        # Draw title (re-render only when color changes significantly)
+        if color_transition < 0.02 or color_transition > 0.98:  # Only re-render at color transitions
+            title_surface = small_font.render("Choose Mission:", True, title_color)
+        title_rect = title_surface.get_rect(center=(WIDTH // 2, HEIGHT // 2 - 150))
+        screen.blit(title_surface, title_rect)
 
         # Draw the A B C button with a neon cyberpunk look
         draw_neon_button(screen, abc_rect, (255, 0, 150))
-        abc_text = small_font.render("A B C", True, WHITE)
-        abc_text_rect = abc_text.get_rect(center=abc_rect.center)
-        screen.blit(abc_text, abc_text_rect)
+        abc_text_rect = abc_surface.get_rect(center=abc_rect.center)
+        screen.blit(abc_surface, abc_text_rect)
 
         # Draw the 1 2 3 button with a neon cyberpunk look
         draw_neon_button(screen, num_rect, (0, 200, 255))
-        num_text = small_font.render("1 2 3", True, WHITE)
-        num_text_rect = num_text.get_rect(center=num_rect.center)
-        screen.blit(num_text, num_text_rect)
+        num_text_rect = num_surface.get_rect(center=num_rect.center)
+        screen.blit(num_surface, num_text_rect)
 
         # Draw the Shapes button with a neon cyberpunk look
         draw_neon_button(screen, shapes_rect, (0, 255, 0))
-        shapes_text = small_font.render("Shapes", True, WHITE)
-        shapes_text_rect = shapes_text.get_rect(center=shapes_rect.center)
-        screen.blit(shapes_text, shapes_text_rect)
+        shapes_text_rect = shapes_surface.get_rect(center=shapes_rect.center)
+        screen.blit(shapes_surface, shapes_text_rect)
 
         # Draw the new C/L Case Letters button
         draw_neon_button(screen, clcase_rect, (255, 255, 0))
-        clcase_text = small_font.render("C/L Case", True, WHITE)
-        clcase_text_rect = clcase_text.get_rect(center=clcase_rect.center)
-        screen.blit(clcase_text, clcase_text_rect)
+        clcase_text_rect = clcase_surface.get_rect(center=clcase_rect.center)
+        screen.blit(clcase_surface, clcase_text_rect)
 
         # Draw the new Colors button with a neon rainbow look
         draw_neon_button(screen, colors_rect, (128, 0, 255))
-        colors_text = small_font.render("Colors", True, WHITE)
-        colors_text_rect = colors_text.get_rect(center=colors_rect.center)
-        screen.blit(colors_text, colors_text_rect)
+        colors_text_rect = colors_surface.get_rect(center=colors_rect.center)
+        screen.blit(colors_surface, colors_text_rect)
 
         pygame.display.flip()
-        clock.tick(60)
+        # Reduce frame rate for QBoard to improve performance
+        target_fps = 45 if display_mode == "QBOARD" else 60
+        clock.tick(target_fps)
 
 def welcome_screen(WIDTH, HEIGHT, screen, small_font, init_resources_callback):
     """Show the welcome screen with display size options."""
@@ -163,6 +176,9 @@ def welcome_screen(WIDTH, HEIGHT, screen, small_font, init_resources_callback):
     running = True
     clock = pygame.time.Clock()
     last_time = pygame.time.get_ticks()
+    
+    # Adjust frame rate based on display mode for performance
+    target_fps = 45 if DISPLAY_MODE == "QBOARD" else 60
     
     while running:
         # Calculate delta time for smooth animations regardless of FPS
@@ -216,6 +232,6 @@ def welcome_screen(WIDTH, HEIGHT, screen, small_font, init_resources_callback):
         display_selector.draw_fps(clock)
         
         pygame.display.flip()
-        clock.tick(60)  # Cap at 60 FPS
+        clock.tick(target_fps)  # Use adaptive frame rate
     
     return DISPLAY_MODE 

@@ -2,17 +2,17 @@ import pygame
 import random
 import math
 from settings import (
-    COLORS_COLLISION_DELAY, LEVEL_PROGRESS_PATH, MAX_CRACKS, WHITE, BLACK, FLAME_COLORS, LASER_EFFECTS,
+    COLORS_COLLISION_DELAY, LEVEL_PROGRESS_PATH, WHITE, BLACK, FLAME_COLORS, LASER_EFFECTS,
     LETTER_SPAWN_INTERVAL, SEQUENCES, GAME_MODES, GROUP_SIZE,
-    SHAKE_DURATION_MISCLICK, SHAKE_MAGNITUDE_MISCLICK,
-    GAME_OVER_CLICK_DELAY, GAME_OVER_COUNTDOWN_SECONDS
+    SHAKE_DURATION_MISCLICK, SHAKE_MAGNITUDE_MISCLICK
 )
 from Display_settings import (
     DISPLAY_MODES, DEFAULT_MODE, DISPLAY_SETTINGS_PATH,
     FONT_SIZES, MAX_PARTICLES as PARTICLES_SETTINGS,
     MAX_EXPLOSIONS as EXPLOSIONS_SETTINGS,
     MAX_SWIRL_PARTICLES as SWIRL_SETTINGS,
-    MOTHER_RADIUS, detect_display_type, load_display_mode, save_display_mode
+    MOTHER_RADIUS, detect_display_type, load_display_mode, save_display_mode,
+    PERFORMANCE_SETTINGS
 )
 from universal_class import GlassShatterManager, HUDManager, CheckpointManager, FlamethrowerManager, CenterPieceManager
 from welcome_screen import welcome_screen, level_menu, draw_neon_button
@@ -109,7 +109,7 @@ def init_resources():
     flamethrower_manager = FlamethrowerManager()
     
     # Initialize center piece manager
-    center_piece_manager = CenterPieceManager(WIDTH, HEIGHT, DISPLAY_MODE, particle_manager, MAX_SWIRL_PARTICLES)
+    center_piece_manager = CenterPieceManager(WIDTH, HEIGHT, DISPLAY_MODE, particle_manager, MAX_SWIRL_PARTICLES, resource_manager)
     
     # Save display mode preference
     save_display_mode(DISPLAY_MODE)
@@ -487,17 +487,6 @@ def game_loop(mode):
         # Update glass shatter manager
         glass_shatter_manager.update()
         
-        # Check if game over was triggered by screen breaking
-        if glass_shatter_manager.is_game_over_ready():
-            game_started = False  # Pause the game
-            if game_over_screen():  # Show game over screen
-                running = False  # Return to level menu
-                break
-            else:
-                # This else block shouldn't normally be reached due to required click
-                running = False
-                break
-
         # Fill background based on shatter state
         screen.fill(glass_shatter_manager.get_background_color())
 
@@ -558,7 +547,7 @@ def game_loop(mode):
             draw_pos_x = int(letter_obj["x"] + offset_x)
             draw_pos_y = int(letter_obj["y"] + offset_y)
 
-            # Draw text for Alphabet, Numbers, C/L Case
+            # Draw text for Alphabet, Numbers, C/L Case using cached fonts for performance
             display_value = letter_obj["value"]
 
             if mode == "clcase" and letter_obj["value"] == "a":
@@ -566,58 +555,70 @@ def game_loop(mode):
 
             # Use gray for non-target letters, black for the target letter
             text_color = BLACK if letter_obj["value"] == target_letter else (150, 150, 150)
-            text_surface = TARGET_FONT.render(display_value, True, text_color)
-            text_rect = text_surface.get_rect(center=(draw_pos_x, draw_pos_y))
-            letter_obj["rect"] = text_rect
-            screen.blit(text_surface, text_rect)
+            
+            # PERFORMANCE OPTIMIZATION: Use cached font surface if available
+            try:
+                cached_surface = resource_manager.get_falling_object_surface(mode, letter_obj["value"], text_color)
+                text_rect = cached_surface.get_rect(center=(draw_pos_x, draw_pos_y))
+                letter_obj["rect"] = text_rect
+                screen.blit(cached_surface, text_rect)
+            except:
+                # Fallback: Original rendering method
+                text_surface = TARGET_FONT.render(display_value, True, text_color)
+                text_rect = text_surface.get_rect(center=(draw_pos_x, draw_pos_y))
+                letter_obj["rect"] = text_rect
+                screen.blit(text_surface, text_rect)
 
 
         # --- Simple Collision Detection Between Items ---
-        for i, letter_obj1 in enumerate(letters):
-            for j in range(i + 1, len(letters)):
-                letter_obj2 = letters[j]
-                dx = letter_obj2["x"] - letter_obj1["x"]
-                dy = letter_obj2["y"] - letter_obj1["y"]
-                distance_sq = dx*dx + dy*dy # Use squared distance for efficiency
+        # PERFORMANCE: Reduce collision check frequency for QBoard
+        collision_frequency = PERFORMANCE_SETTINGS[DISPLAY_MODE]["collision_check_frequency"]
+        if frame_count % collision_frequency == 0:
+            for i, letter_obj1 in enumerate(letters):
+                for j in range(i + 1, len(letters)):
+                    letter_obj2 = letters[j]
+                    dx = letter_obj2["x"] - letter_obj1["x"]
+                    dy = letter_obj2["y"] - letter_obj1["y"]
+                    distance_sq = dx*dx + dy*dy # Use squared distance for efficiency
 
-                # Approximate collision radius based on font/shape size
-                # Use a slightly larger radius for text to account for varying widths
-                radius1 = letter_obj1.get("size", TARGET_FONT.get_height()) / 1.8 # Approx radius
-                radius2 = letter_obj2.get("size", TARGET_FONT.get_height()) / 1.8
-                min_distance = radius1 + radius2
-                min_distance_sq = min_distance * min_distance
+                    # Approximate collision radius based on font/shape size
+                    # Use a slightly larger radius for text to account for varying widths
+                    radius1 = letter_obj1.get("size", TARGET_FONT.get_height()) / 1.8 # Approx radius
+                    radius2 = letter_obj2.get("size", TARGET_FONT.get_height()) / 1.8
+                    min_distance = radius1 + radius2
+                    min_distance_sq = min_distance * min_distance
 
-                if distance_sq < min_distance_sq and distance_sq > 0: # Check for overlap
-                    distance = math.sqrt(distance_sq)
-                    # Normalize collision vector
-                    nx = dx / distance
-                    ny = dy / distance
+                    if distance_sq < min_distance_sq and distance_sq > 0: # Check for overlap
+                        distance = math.sqrt(distance_sq)
+                        # Normalize collision vector
+                        nx = dx / distance
+                        ny = dy / distance
 
-                    # Resolve interpenetration (push apart)
-                    overlap = min_distance - distance
-                    total_mass = letter_obj1["mass"] + letter_obj2["mass"]
-                    # Push apart proportional to the *other* object's mass
-                    push_factor = overlap / total_mass
-                    letter_obj1["x"] -= nx * push_factor * letter_obj2["mass"]
-                    letter_obj1["y"] -= ny * push_factor * letter_obj2["mass"]
-                    letter_obj2["x"] += nx * push_factor * letter_obj1["mass"]
-                    letter_obj2["y"] += ny * push_factor * letter_obj1["mass"]
+                        # Resolve interpenetration (push apart)
+                        overlap = min_distance - distance
+                        total_mass = letter_obj1["mass"] + letter_obj2["mass"]
+                        # Push apart proportional to the *other* object's mass
+                        push_factor = overlap / total_mass
+                        letter_obj1["x"] -= nx * push_factor * letter_obj2["mass"]
+                        letter_obj1["y"] -= ny * push_factor * letter_obj2["mass"]
+                        letter_obj2["x"] += nx * push_factor * letter_obj1["mass"]
+                        letter_obj2["y"] += ny * push_factor * letter_obj1["mass"]
 
-                    # Calculate collision response (bounce) - Elastic collision formula component
-                    # Relative velocity
-                    dvx = letter_obj1["dx"] - letter_obj2["dx"]
-                    dvy = letter_obj1["dy"] - letter_obj2["dy"]
-                    # Dot product of relative velocity and collision normal
-                    dot_product = dvx * nx + dvy * ny
-                    # Impulse magnitude
-                    impulse = (2 * dot_product) / total_mass
-                    bounce_factor = 0.85 # Slightly less than perfectly elastic
+                        # Calculate collision response (bounce) - Elastic collision formula component
+                        # Relative velocity
+                        dvx = letter_obj1["dx"] - letter_obj2["dx"]
+                        dvy = letter_obj1["dy"] - letter_obj2["dy"]
+                        # Dot product of relative velocity and collision normal
+                        dot_product = dvx * nx + dvy * ny
+                        # Impulse magnitude
+                        impulse = (2 * dot_product) / total_mass
+                        bounce_factor = 0.85 # Slightly less than perfectly elastic
 
-                    # Apply impulse scaled by mass and bounce factor
-                    letter_obj1["dx"] -= impulse * letter_obj2["mass"] * nx * bounce_factor
-                    letter_obj1["dy"] -= impulse * letter_obj2["mass"] * ny * bounce_factor
-                    letter_obj2["dx"] += impulse * letter_obj1["mass"] * nx * bounce_factor
-                    letter_obj2["dy"] += impulse * letter_obj1["mass"] * ny * bounce_factor
+                        # Apply impulse scaled by mass and bounce factor
+                        letter_obj1["dx"] -= impulse * letter_obj2["mass"] * nx * bounce_factor
+                        letter_obj1["dy"] -= impulse * letter_obj2["mass"] * ny * bounce_factor
+                        letter_obj2["dx"] += impulse * letter_obj1["mass"] * nx * bounce_factor
+                        letter_obj2["dy"] += impulse * letter_obj1["mass"] * ny * bounce_factor
 
 
         # --- Process Flamethrower Effects ---
@@ -780,12 +781,7 @@ def game_loop(mode):
         # --- Display HUD Info ---
         if mode != "colors":
             hud_manager.display_info(screen, score, current_ability, target_letter, overall_destroyed + letters_destroyed, TOTAL_LETTERS, mode)
-
-        # --- Player Trail Effect (less relevant if player doesn't move) ---
-        # if game_started:
-        #     create_player_trail(player_x, player_y)
-
-
+            
         # --- Update Display ---
         pygame.display.flip()
         clock.tick(50)  # PERFORMANCE: Lower FPS for all main game loops
@@ -983,7 +979,11 @@ def start_charge_up_effect(player_x, player_y, target_x, target_y):
     charge_timer = 45
     ability_target = (target_x, target_y)
     charge_particles = []
-    for _ in range(150):  # Restore to 150
+    
+    # PERFORMANCE: Reduce particle count for QBoard
+    particle_count = 75 if DISPLAY_MODE == "QBOARD" else 150
+    
+    for _ in range(particle_count):
         side = random.choice(['top', 'bottom', 'left', 'right'])
         if side == 'top':
             x, y = random.uniform(0, WIDTH), random.uniform(-100, -20)
@@ -1081,112 +1081,10 @@ def create_flame_effect(start_x, start_y, end_x, end_y):
 
 def game_over_screen():
     """Screen shown when player breaks the screen completely."""
-    flash = True
-    flash_count = 0
-    running = True
-    clock = pygame.time.Clock()
-    
-    # Add click delay timer (5 seconds at 60 fps = 300 frames)
-    click_delay = GAME_OVER_CLICK_DELAY
-    click_enabled = False
-    countdown_seconds = GAME_OVER_COUNTDOWN_SECONDS
-    
-    # Calculate sad face dimensions (70% of screen)
-    face_radius = min(WIDTH, HEIGHT) * 0.35  # 70% diameter, so 35% radius
-    face_center_x = WIDTH // 2
-    face_center_y = HEIGHT // 2 - 50  # Slight offset to make room for text
-    
-    # Eye dimensions
-    eye_radius = face_radius * 0.15
-    eye_offset_x = face_radius * 0.2
-    eye_offset_y = face_radius * 0.1
-    
-    # Mouth dimensions
-    mouth_width = face_radius * 0.6
-    mouth_height = face_radius * 0.3
-    mouth_offset_y = face_radius * 0.15
-    
-    while running:
-        screen.fill(BLACK)
-        for event in pygame.event.get():
-            if event.type == pygame.QUIT:
-                pygame.quit()
-                exit()
-            if event.type == pygame.KEYDOWN and event.key == pygame.K_ESCAPE:
-                pygame.quit()
-                exit()
-            # Force click to continue, but only after delay expires
-            if event.type == pygame.MOUSEBUTTONDOWN and click_enabled:
-                running = False
-                # Reset game state for next play
-                glass_shatter_manager.reset()
-                return True  # Return True to indicate we should go back to level menu
-        
-        # Draw sad face (70% of screen)
-        pygame.draw.circle(screen, WHITE, (face_center_x, face_center_y), int(face_radius), 5)
-        
-        # Draw eyes (X marks)
-        left_eye_x = face_center_x - eye_offset_x
-        right_eye_x = face_center_x + eye_offset_x
-        eye_y = face_center_y - eye_offset_y
-        
-        # Left eye X
-        pygame.draw.line(screen, WHITE, 
-                        (left_eye_x - eye_radius, eye_y - eye_radius),
-                        (left_eye_x + eye_radius, eye_y + eye_radius), 5)
-        pygame.draw.line(screen, WHITE, 
-                        (left_eye_x - eye_radius, eye_y + eye_radius),
-                        (left_eye_x + eye_radius, eye_y - eye_radius), 5)
-        
-        # Right eye X
-        pygame.draw.line(screen, WHITE, 
-                        (right_eye_x - eye_radius, eye_y - eye_radius),
-                        (right_eye_x + eye_radius, eye_y + eye_radius), 5)
-        pygame.draw.line(screen, WHITE, 
-                        (right_eye_x - eye_radius, eye_y + eye_radius),
-                        (right_eye_x + eye_radius, eye_y - eye_radius), 5)
-        
-        # Draw sad mouth (upside down arc)
-        mouth_rect = pygame.Rect(
-            face_center_x - mouth_width // 2,
-            face_center_y + mouth_offset_y,
-            mouth_width,
-            mouth_height
-        )
-        pygame.draw.arc(screen, WHITE, mouth_rect, 0, math.pi, 5)
-        
-        # Display "You broke the screen!" message
-        game_over_font = fonts[2]  # Use one of the preloaded larger fonts
-        game_over_text = game_over_font.render("You broke the screen!", True, WHITE)
-        game_over_rect = game_over_text.get_rect(center=(WIDTH // 2, HEIGHT // 2 + face_radius + 50))
-        screen.blit(game_over_text, game_over_rect)
-        
-        # Flashing "NEXT PLAYER!" text alternating between RED and WHITE
-        next_player_color = (255, 0, 0) if flash else (255, 255, 255)  # RED and WHITE
-        next_player_text = fonts[0].render("NEXT PLAYER!", True, next_player_color)
-        next_player_rect = next_player_text.get_rect(center=(WIDTH // 2, HEIGHT // 2 + face_radius + 120))
-        screen.blit(next_player_text, next_player_rect)
-        
-        # Update and display click delay countdown
-        if click_delay > 0:
-            click_delay -= 1
-            current_second = countdown_seconds - (click_delay // 60)
-            countdown_text = small_font.render(f"Please wait {max(1, current_second + 1)}...", True, (150, 150, 150))
-            click_rect = countdown_text.get_rect(center=(WIDTH // 2, HEIGHT // 2 + face_radius + 180))
-            screen.blit(countdown_text, click_rect)
-        else:
-            click_enabled = True
-            click_text = small_font.render("Click to continue", True, (150, 150, 150))
-            click_rect = click_text.get_rect(center=(WIDTH // 2, HEIGHT // 2 + face_radius + 180))
-            screen.blit(click_text, click_rect)
-        
-        pygame.display.flip()
-        flash_count += 1
-        if flash_count % 15 == 0:  # Flash faster (twice per second)
-            flash = not flash
-        clock.tick(60)
-    
-    return False  # Should not be reached if click is required
+    # This function is now a placeholder and should be implemented
+    # to provide a user-friendly message and allow the player to restart the game
+    print("Game over screen is not implemented yet.")
+    return False  # Placeholder return, actual implementation needed
 
 if __name__ == "__main__":
     DISPLAY_MODE = welcome_screen(WIDTH, HEIGHT, screen, small_font, init_resources)

@@ -267,13 +267,6 @@ class ColorsLevel:
             if not self._handle_events():
                 return False
                 
-            # Check if game over was triggered by screen breaking
-            if self.glass_shatter_manager.is_game_over_ready():
-                if self.game_over_screen():
-                    return False
-                else:
-                    return False
-                    
             # Update dots physics
             self._update_dots()
             
