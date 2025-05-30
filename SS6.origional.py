@@ -16,7 +16,7 @@ from Display_settings import (
 )
 from universal_class import GlassShatterManager, HUDManager, CheckpointManager, FlamethrowerManager, CenterPieceManager
 from welcome_screen import welcome_screen, level_menu, draw_neon_button
-from levels import ColorsLevel, ShapesLevel
+from levels import ColorsLevel, ShapesLevel, AlphabetLevel
 
 pygame.init()
 
@@ -296,6 +296,19 @@ def game_loop(mode):
             explosions, lasers, draw_explosion, game_over_screen
         )
         return shapes_level.run()
+    
+    # --- ALPHABET LEVEL SPECIAL LOGIC ---
+    if mode == "alphabet":
+        # Create and run the alphabet level
+        alphabet_level = AlphabetLevel(
+            WIDTH, HEIGHT, screen, fonts, small_font, TARGET_FONT,
+            particle_manager, glass_shatter_manager, multi_touch_manager,
+            hud_manager, checkpoint_manager, center_piece_manager, 
+            flamethrower_manager, resource_manager, create_explosion, create_flame_effect,
+            apply_explosion_effect, create_particle,
+            explosions, lasers, draw_explosion, game_over_screen
+        )
+        return alphabet_level.run()
 
     # --- Main Game Loop ---
     while running:
