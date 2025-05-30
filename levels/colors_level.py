@@ -10,7 +10,7 @@ from universal_class import GlassShatterManager, HUDManager, MultiTouchManager
 
 class ColorsLevel:
     """
-    Handles the Colors level gameplay logic.
+    Handles the Colors level gameplay logic with performance optimizations.
     """
     
     def __init__(self, width, height, screen, small_font, particle_manager, 
@@ -61,6 +61,18 @@ class ColorsLevel:
         ]
         self.color_names = ["Blue", "Red", "Green", "Yellow", "Purple"]
         
+        # PERFORMANCE OPTIMIZATION: Cache font objects
+        self.ghost_font = pygame.font.Font(None, 48)
+        
+        # PERFORMANCE OPTIMIZATION: Spatial grid for collision detection
+        self.grid_size = 120  # Grid cell size for spatial partitioning
+        self.grid_cols = (width // self.grid_size) + 1
+        self.grid_rows = (height // self.grid_size) + 1
+        
+        # VISUAL ENHANCEMENT: Shimmer and depth effects
+        self.frame_counter = 0
+        self.shimmer_seeds = {}  # Per-dot shimmer seed for consistency
+        
         # Game state variables
         self.reset_level_state()
         
@@ -85,6 +97,57 @@ class ColorsLevel:
         self.collision_delay_frames = COLORS_COLLISION_DELAY
         self.score = 0
         self.running = True
+        self.frame_counter = 0
+        self.shimmer_seeds = {}
+        
+    def _create_spatial_grid(self):
+        """Create spatial grid for optimized collision detection."""
+        grid = [[[] for _ in range(self.grid_cols)] for _ in range(self.grid_rows)]
+        
+        for i, dot in enumerate(self.dots):
+            if dot["alive"]:
+                grid_x = min(int(dot["x"] // self.grid_size), self.grid_cols - 1)
+                grid_y = min(int(dot["y"] // self.grid_size), self.grid_rows - 1)
+                grid[grid_y][grid_x].append(i)
+                
+        return grid
+        
+    def _get_grid_neighbors(self, x, y):
+        """Get neighboring grid cells for collision detection."""
+        grid_x = min(int(x // self.grid_size), self.grid_cols - 1)
+        grid_y = min(int(y // self.grid_size), self.grid_rows - 1)
+        
+        neighbors = []
+        for dy in [-1, 0, 1]:
+            for dx in [-1, 0, 1]:
+                nx, ny = grid_x + dx, grid_y + dy
+                if 0 <= nx < self.grid_cols and 0 <= ny < self.grid_rows:
+                    neighbors.append((nx, ny))
+        return neighbors
+        
+    def _calculate_dot_shading(self, base_color, radius, is_target=False):
+        """Calculate depth shading for dots with gradient effect."""
+        # Create gradient from lighter center to darker edge
+        center_color = tuple(min(255, int(c * 1.3)) for c in base_color)
+        edge_color = tuple(max(0, int(c * 0.7)) for c in base_color)
+        
+        # Add glow effect for target dots
+        if is_target:
+            glow_intensity = 0.2 + 0.1 * math.sin(self.frame_counter * 0.1)
+            center_color = tuple(min(255, int(c * (1.0 + glow_intensity))) for c in center_color)
+            
+        return center_color, edge_color
+        
+    def _get_shimmer_effect(self, dot_id):
+        """Get shimmer effect values for a specific dot."""
+        if dot_id not in self.shimmer_seeds:
+            self.shimmer_seeds[dot_id] = random.random() * 6.28  # Random phase
+            
+        seed = self.shimmer_seeds[dot_id]
+        shimmer = math.sin(self.frame_counter * 0.05 + seed) * 0.1 + 1.0
+        alpha_shimmer = math.sin(self.frame_counter * 0.08 + seed) * 15 + 240
+        
+        return shimmer, max(200, min(255, int(alpha_shimmer)))
         
     def run(self):
         """
@@ -365,7 +428,7 @@ class ColorsLevel:
             self._handle_checkpoint()
             
     def _switch_target_color(self):
-        """Switch to a new target color."""
+        """Switch to a new target color with optimized performance."""
         # Get the next color from unused colors first
         available_colors = [i for i in range(len(self.COLORS_LIST)) if i not in self.used_colors]
         
@@ -391,13 +454,16 @@ class ColorsLevel:
             "text": self.mother_color_name
         }
         
-        # Update target status for all dots
+        # PERFORMANCE OPTIMIZATION: Batch update target status and count in single loop
+        target_count = 0
         for d in self.dots:
             if d["alive"]:
-                d["target"] = (d["color"] == self.mother_color)
-                
-        # Update target_dots_left count based on alive target dots
-        self.target_dots_left = sum(1 for d in self.dots if d["target"] and d["alive"])
+                is_target = (d["color"] == self.mother_color)
+                d["target"] = is_target
+                if is_target:
+                    target_count += 1
+                    
+        self.target_dots_left = target_count
         
     def _handle_checkpoint(self):
         """Handle checkpoint screen display."""
@@ -447,23 +513,50 @@ class ColorsLevel:
                 dot["dy"] *= -1
                 
     def _handle_dot_collisions(self):
-        """Handle collisions between dots."""
-        for i, dot1 in enumerate(self.dots):
-            if not dot1["alive"]:
-                continue
-            for j, dot2 in enumerate(self.dots[i+1:], i+1):
-                if not dot2["alive"]:
+        """Handle collisions between dots with spatial optimization."""
+        if len(self.dots) < 2:
+            return
+            
+        # PERFORMANCE OPTIMIZATION: Use spatial grid to reduce collision checks
+        grid = self._create_spatial_grid()
+        checked_pairs = set()
+        
+        for grid_y in range(self.grid_rows):
+            for grid_x in range(self.grid_cols):
+                cell_dots = grid[grid_y][grid_x]
+                if len(cell_dots) < 2:
                     continue
                     
-                # Calculate distance between centers
-                dx = dot1["x"] - dot2["x"]
-                dy = dot1["y"] - dot2["y"]
-                distance = math.hypot(dx, dy)
-                
-                # Check for collision
-                if distance < (dot1["radius"] + dot2["radius"]):
-                    self._resolve_collision(dot1, dot2, dx, dy, distance)
+                # Check collisions within cell and adjacent cells
+                for neighbor_x, neighbor_y in [(grid_x, grid_y)] + [(grid_x+dx, grid_y+dy) for dx in [-1,0,1] for dy in [-1,0,1] if 0 <= grid_x+dx < self.grid_cols and 0 <= grid_y+dy < self.grid_rows]:
+                    if neighbor_x == grid_x and neighbor_y == grid_y:
+                        continue
+                    neighbor_dots = grid[neighbor_y][neighbor_x]
                     
+                    for i in cell_dots:
+                        for j in neighbor_dots:
+                            if i >= j:  # Avoid duplicate checks
+                                continue
+                            pair = (min(i, j), max(i, j))
+                            if pair in checked_pairs:
+                                continue
+                            checked_pairs.add(pair)
+                            
+                            dot1, dot2 = self.dots[i], self.dots[j]
+                            if not (dot1["alive"] and dot2["alive"]):
+                                continue
+                                
+                            # Calculate distance between centers
+                            dx = dot1["x"] - dot2["x"]
+                            dy = dot1["y"] - dot2["y"]
+                            distance_sq = dx*dx + dy*dy
+                            collision_dist_sq = (dot1["radius"] + dot2["radius"]) ** 2
+                            
+                            # Check for collision (using squared distance for performance)
+                            if distance_sq < collision_dist_sq and distance_sq > 0:
+                                distance = math.sqrt(distance_sq)
+                                self._resolve_collision(dot1, dot2, dx, dy, distance)
+
     def _resolve_collision(self, dot1, dot2, dx, dy, distance):
         """Resolve collision between two dots."""
         # Normalize direction vector
@@ -526,7 +619,9 @@ class ColorsLevel:
                 )
                 
     def _draw_frame(self, stars):
-        """Draw a single frame of the colors level."""
+        """Draw a single frame of the colors level with visual enhancements."""
+        self.frame_counter += 1
+        
         # Update glass shatter manager
         self.glass_shatter_manager.update()
         
@@ -550,12 +645,52 @@ class ColorsLevel:
             star[1] = y
             star[0] = x
             
-        # Draw all alive dots with screen shake offsets
+        # VISUAL ENHANCEMENT: Draw dots with depth shading and shimmer effects
         for dot in self.dots:
             if dot["alive"]:
-                pygame.draw.circle(self.screen, dot["color"], 
-                                  (int(dot["x"] + offset_x), int(dot["y"] + offset_y)), 
-                                  dot["radius"])
+                dot_id = dot.get("id", id(dot))  # Use ID or fallback to object ID
+                
+                # Get shimmer effect
+                shimmer_scale, shimmer_alpha = self._get_shimmer_effect(dot_id)
+                
+                # Calculate shaded colors
+                center_color, edge_color = self._calculate_dot_shading(dot["color"], dot["radius"], dot["target"])
+                
+                # Apply shimmer to radius
+                shimmer_radius = int(dot["radius"] * shimmer_scale)
+                
+                draw_x = int(dot["x"] + offset_x)
+                draw_y = int(dot["y"] + offset_y)
+                
+                # Draw depth gradient (multiple circles for smooth gradient)
+                for i in range(3):
+                    gradient_radius = shimmer_radius - (i * shimmer_radius // 4)
+                    if gradient_radius > 0:
+                        # Interpolate between center and edge color
+                        blend_factor = i / 3.0
+                        blended_color = tuple(
+                            int(center_color[j] * (1 - blend_factor) + edge_color[j] * blend_factor)
+                            for j in range(3)
+                        )
+                        
+                        # Create surface with alpha for shimmer effect
+                        if i == 0:  # Outermost circle gets shimmer alpha
+                            dot_surface = pygame.Surface((gradient_radius * 2, gradient_radius * 2), pygame.SRCALPHA)
+                            pygame.draw.circle(dot_surface, (*blended_color, shimmer_alpha), 
+                                             (gradient_radius, gradient_radius), gradient_radius)
+                            self.screen.blit(dot_surface, (draw_x - gradient_radius, draw_y - gradient_radius))
+                        else:
+                            pygame.draw.circle(self.screen, blended_color, 
+                                             (draw_x, draw_y), gradient_radius)
+                                             
+                # Add extra glow for target dots
+                if dot["target"]:
+                    glow_radius = shimmer_radius + 8
+                    glow_intensity = int(50 + 30 * math.sin(self.frame_counter * 0.15))
+                    glow_surface = pygame.Surface((glow_radius * 2, glow_radius * 2), pygame.SRCALPHA)
+                    pygame.draw.circle(glow_surface, (*dot["color"], glow_intensity), 
+                                     (glow_radius, glow_radius), glow_radius)
+                    self.screen.blit(glow_surface, (draw_x - glow_radius, draw_y - glow_radius))
                                   
         # Draw explosions with offsets
         for explosion in self.explosions[:]:
@@ -586,44 +721,39 @@ class ColorsLevel:
         self._draw_ghost_notification()
         
     def _draw_ghost_notification(self):
-        """Draw the ghost notification if active."""
+        """Draw the ghost notification with optimized rendering."""
         if self.ghost_notification and self.ghost_notification["duration"] > 0:
-            # Create a semi-transparent surface for the ghost effect
-            ghost_surface = pygame.Surface((self.width, self.height), pygame.SRCALPHA)
-            ghost_surface.fill((0, 0, 0, 0))
-            
-            # Draw ghost dot
+            # PERFORMANCE OPTIMIZATION: Use cached font instead of creating new one
             alpha = min(255, self.ghost_notification["alpha"])
+            
+            # Create a more efficient ghost effect without full-screen SRCALPHA surface
+            center_x = self.width // 2
+            center_y = self.height // 2
+            radius = self.ghost_notification["radius"]
+            
+            # Draw ghost dot with alpha blending
+            ghost_surface = pygame.Surface((radius * 2, radius * 2), pygame.SRCALPHA)
             ghost_color = self.ghost_notification["color"] + (alpha,)
-            pygame.draw.circle(ghost_surface, ghost_color, 
-                             (self.width // 2, self.height // 2), 
-                             self.ghost_notification["radius"])
+            pygame.draw.circle(ghost_surface, ghost_color, (radius, radius), radius)
+            self.screen.blit(ghost_surface, (center_x - radius, center_y - radius))
             
             # Add "Target Color:" label above the dot
-            ghost_font = pygame.font.Font(None, 48)
-            target_label = ghost_font.render("TARGET COLOR:", True, WHITE)
-            target_label_rect = target_label.get_rect(
-                center=(self.width // 2, self.height // 2 - self.ghost_notification["radius"] - 20)
-            )
-            ghost_surface.blit(target_label, target_label_rect)
+            target_label = self.ghost_font.render("TARGET COLOR:", True, WHITE)
+            target_label_rect = target_label.get_rect(center=(center_x, center_y - radius - 20))
+            self.screen.blit(target_label, target_label_rect)
             
             # Add color name label below the dot
-            ghost_text = ghost_font.render(self.ghost_notification["text"], True, self.ghost_notification["color"])
-            ghost_text_rect = ghost_text.get_rect(
-                center=(self.width // 2, self.height // 2 + self.ghost_notification["radius"] + 30)
-            )
-            ghost_surface.blit(ghost_text, ghost_text_rect)
-            
-            # Apply the ghost surface
-            self.screen.blit(ghost_surface, (0, 0))
+            ghost_text = self.ghost_font.render(self.ghost_notification["text"], True, self.ghost_notification["color"])
+            ghost_text_rect = ghost_text.get_rect(center=(center_x, center_y + radius + 30))
+            self.screen.blit(ghost_text, ghost_text_rect)
             
             # Update notification
             self.ghost_notification["duration"] -= 1
             if self.ghost_notification["duration"] < 50:
                 self.ghost_notification["alpha"] -= 5
-                
+        
     def _generate_new_dots(self):
-        """Generate new dots when target_dots_left reaches 0."""
+        """Generate new dots when target_dots_left reaches 0 with optimized placement."""
         new_dots_count = 10
         self.target_dots_left = new_dots_count
         
@@ -656,31 +786,26 @@ class ColorsLevel:
         # Remove dead dots
         self.dots = [d for d in self.dots if d["alive"]]
         
-        # Calculate new dots needed
-        new_dots_needed = 100 - len(self.dots)
+        # PERFORMANCE OPTIMIZATION: Use grid-based placement algorithm
+        new_dots_needed = min(100 - len(self.dots), 50)  # Limit to prevent lag
         existing_target_dots = sum(1 for d in self.dots if d["color"] == self.mother_color)
         target_dots_needed = max(0, new_dots_count - existing_target_dots)
         
-        # Create new dots
+        # Create occupancy grid for faster collision detection during placement
+        occupancy_grid = self._create_occupancy_grid()
+        
+        # Create new dots with optimized placement
+        dots_created = 0
         for i in range(new_dots_needed):
-            # Find valid position
-            max_attempts = 10
-            valid_position = False
-            
-            for _ in range(max_attempts):
-                x = random.randint(100, self.width - 100)
-                y = random.randint(100, self.height - 100)
+            if dots_created >= new_dots_needed:
+                break
                 
-                valid_position = True
-                for existing_dot in self.dots:
-                    distance = math.hypot(x - existing_dot["x"], y - existing_dot["y"])
-                    if distance < 100:
-                        valid_position = False
-                        break
-                        
-                if valid_position:
-                    break
-                    
+            # PERFORMANCE OPTIMIZATION: Grid-based placement
+            position = self._find_valid_position_optimized(occupancy_grid)
+            if position is None:
+                continue
+                
+            x, y = position
             dx = random.uniform(-6, 6)
             dy = random.uniform(-6, 6)
             
@@ -693,6 +818,7 @@ class ColorsLevel:
                 distractor_colors = [c for idx, c in enumerate(self.COLORS_LIST) if idx != self.color_idx]
                 color = random.choice(distractor_colors)
                 
+            dot_id = len(self.dots)
             self.dots.append({
                 "x": x, "y": y,
                 "dx": dx, "dy": dy,
@@ -700,14 +826,54 @@ class ColorsLevel:
                 "radius": 48,
                 "target": is_target,
                 "alive": True,
+                "id": dot_id  # Add unique ID for shimmer tracking
             })
             
-        # Update all dots to ensure target status is correctly set
+            # Mark position as occupied in grid
+            grid_x = min(int(x // self.grid_size), self.grid_cols - 1)
+            grid_y = min(int(y // self.grid_size), self.grid_rows - 1)
+            occupancy_grid[grid_y][grid_x] = True
+            dots_created += 1
+            
+        # PERFORMANCE OPTIMIZATION: Single pass target update
+        target_count = 0
         for d in self.dots:
-            if d["color"] == self.mother_color:
-                d["target"] = True
-            else:
-                d["target"] = False
+            is_target = (d["color"] == self.mother_color)
+            d["target"] = is_target
+            if is_target and d["alive"]:
+                target_count += 1
                 
-        # Count and update actual target dots left
-        self.target_dots_left = sum(1 for d in self.dots if d["target"] and d["alive"]) 
+        self.target_dots_left = target_count
+        
+    def _create_occupancy_grid(self):
+        """Create occupancy grid for optimized dot placement."""
+        occupancy_grid = [[False for _ in range(self.grid_cols)] for _ in range(self.grid_rows)]
+        
+        for dot in self.dots:
+            if dot["alive"]:
+                grid_x = min(int(dot["x"] // self.grid_size), self.grid_cols - 1)
+                grid_y = min(int(dot["y"] // self.grid_size), self.grid_rows - 1)
+                occupancy_grid[grid_y][grid_x] = True
+                
+        return occupancy_grid
+        
+    def _find_valid_position_optimized(self, occupancy_grid):
+        """Find valid position using grid-based approach for better performance."""
+        max_attempts = 15
+        
+        for _ in range(max_attempts):
+            grid_x = random.randint(1, self.grid_cols - 2)
+            grid_y = random.randint(1, self.grid_rows - 2)
+            
+            # Check if this grid cell and immediate neighbors are free
+            if not occupancy_grid[grid_y][grid_x]:
+                x = random.randint(grid_x * self.grid_size + 60, (grid_x + 1) * self.grid_size - 60)
+                y = random.randint(grid_y * self.grid_size + 60, (grid_y + 1) * self.grid_size - 60)
+                
+                x = max(100, min(self.width - 100, x))
+                y = max(100, min(self.height - 100, y))
+                
+                return (x, y)
+                
+        # Fallback to random position if grid method fails
+        return (random.randint(100, self.width - 100), random.randint(100, self.height - 100)) 
