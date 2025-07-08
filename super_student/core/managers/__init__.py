@@ -9,10 +9,14 @@ that new-style imports work:
 
 from __future__ import annotations
 
+# Re-import MultiTouchManager from the local module which now owns the
+# implementation.  The remaining managers are still provided by the
+# legacy *universal_class* file until they are migrated.
+
+from .multi_touch import MultiTouchManager  # noqa: F401
 from universal_class import (
     GlassShatterManager,
     HUDManager,
-    MultiTouchManager,
     CheckpointManager,
     FlamethrowerManager,
     CenterPieceManager,
