@@ -14,8 +14,8 @@ from __future__ import annotations
 # legacy *universal_class* file until they are migrated.
 
 from .multi_touch import MultiTouchManager  # noqa: F401
+from .glass_shatter import GlassShatterManager  # noqa: F401
 from universal_class import (
-    GlassShatterManager,
     HUDManager,
     CheckpointManager,
     FlamethrowerManager,

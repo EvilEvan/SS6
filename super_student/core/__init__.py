@@ -9,8 +9,8 @@ from __future__ import annotations
 
 # Re-export managers for the transition phase.
 from .managers.multi_touch import MultiTouchManager  # noqa: F401
+from .managers.glass_shatter import GlassShatterManager  # noqa: F401
 from universal_class import (
-    GlassShatterManager,
     HUDManager,
     CheckpointManager,
     FlamethrowerManager,
