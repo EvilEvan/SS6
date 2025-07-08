@@ -13,14 +13,13 @@ from __future__ import annotations
 # implementation.  The remaining managers are still provided by the
 # legacy *universal_class* file until they are migrated.
 
-from .multi_touch import MultiTouchManager  # noqa: F401
 from .glass_shatter import GlassShatterManager  # noqa: F401
-from universal_class import (
-    HUDManager,
-    CheckpointManager,
-    FlamethrowerManager,
-    CenterPieceManager,
-)
+from .multi_touch import MultiTouchManager  # noqa: F401
+from .hud import HUDManager  # noqa: F401
+from .checkpoint import CheckpointManager  # noqa: F401
+from .flamethrower import FlamethrowerManager  # noqa: F401
+from .center_piece import CenterPieceManager  # noqa: F401
+# Remaining legacy exports can be dropped once all managers are migrated.
 
 __all__ = [
     "GlassShatterManager",
