@@ -6,6 +6,7 @@ from settings import (
     LEVEL_PROGRESS_PATH
 )
 from universal_class import GlassShatterManager, HUDManager, MultiTouchManager
+from collections import defaultdict  # NEW: for sparse spatial grid
 
 
 class ColorsLevel:
@@ -72,6 +73,8 @@ class ColorsLevel:
         # VISUAL ENHANCEMENT: Shimmer and depth effects
         self.frame_counter = 0
         self.shimmer_seeds = {}  # Per-dot shimmer seed for consistency
+        # NEW: cache for pre-rendered circle surfaces
+        self.surface_cache = {}
         
         # Game state variables
         self.reset_level_state()
@@ -101,15 +104,14 @@ class ColorsLevel:
         self.shimmer_seeds = {}
         
     def _create_spatial_grid(self):
-        """Create spatial grid for optimized collision detection."""
-        grid = [[[] for _ in range(self.grid_cols)] for _ in range(self.grid_rows)]
-        
+        """Create sparse spatial grid (dict) for optimized collision detection."""
+        grid = defaultdict(list)  # key -> list of dot indices
         for i, dot in enumerate(self.dots):
-            if dot["alive"]:
-                grid_x = min(int(dot["x"] // self.grid_size), self.grid_cols - 1)
-                grid_y = min(int(dot["y"] // self.grid_size), self.grid_rows - 1)
-                grid[grid_y][grid_x].append(i)
-                
+            if not dot["alive"]:
+                continue
+            grid_x = int(dot["x"] // self.grid_size)
+            grid_y = int(dot["y"] // self.grid_size)
+            grid[(grid_x, grid_y)].append(i)
         return grid
         
     def _get_grid_neighbors(self, x, y):
@@ -148,6 +150,17 @@ class ColorsLevel:
         alpha_shimmer = math.sin(self.frame_counter * 0.08 + seed) * 15 + 240
         
         return shimmer, max(200, min(255, int(alpha_shimmer)))
+
+    # NEW helper -----------------------------------------------------------
+    def _get_circle_surface(self, color, radius):
+        """Return cached filled-circle surface for given color & radius."""
+        key = (color, radius)
+        surf = self.surface_cache.get(key)
+        if surf is None:
+            surf = pygame.Surface((radius * 2, radius * 2), pygame.SRCALPHA)
+            pygame.draw.circle(surf, color, (radius, radius), radius)
+            self.surface_cache[key] = surf
+        return surf
         
     def run(self):
         """
@@ -395,16 +408,21 @@ class ColorsLevel:
             bool: True if a target was hit, False otherwise
         """
         hit_target = False
-        
+        radius_cache = {}
         for dot in self.dots:
-            if dot["alive"]:
-                dist = math.hypot(x - dot["x"], y - dot["y"])
-                if dist <= dot["radius"]:
-                    hit_target = True
-                    if dot["target"]:
-                        self._destroy_target_dot(dot)
-                    break
-                    
+            if not dot["alive"]:
+                continue
+            r_sq = radius_cache.get(dot["radius"])
+            if r_sq is None:
+                r_sq = dot["radius"] ** 2
+                radius_cache[dot["radius"]] = r_sq
+            dx = x - dot["x"]
+            dy = y - dot["y"]
+            if dx * dx + dy * dy <= r_sq:
+                hit_target = True
+                if dot["target"]:
+                    self._destroy_target_dot(dot)
+                break
         return hit_target
         
     def _destroy_target_dot(self, dot):
@@ -513,49 +531,37 @@ class ColorsLevel:
                 dot["dy"] *= -1
                 
     def _handle_dot_collisions(self):
-        """Handle collisions between dots with spatial optimization."""
+        """Handle collisions between dots using sparse spatial grid."""
         if len(self.dots) < 2:
             return
-            
-        # PERFORMANCE OPTIMIZATION: Use spatial grid to reduce collision checks
         grid = self._create_spatial_grid()
         checked_pairs = set()
-        
-        for grid_y in range(self.grid_rows):
-            for grid_x in range(self.grid_cols):
-                cell_dots = grid[grid_y][grid_x]
-                if len(cell_dots) < 2:
-                    continue
-                    
-                # Check collisions within cell and adjacent cells
-                for neighbor_x, neighbor_y in [(grid_x, grid_y)] + [(grid_x+dx, grid_y+dy) for dx in [-1,0,1] for dy in [-1,0,1] if 0 <= grid_x+dx < self.grid_cols and 0 <= grid_y+dy < self.grid_rows]:
-                    if neighbor_x == grid_x and neighbor_y == grid_y:
+        for (gx, gy), cell_dots in grid.items():
+            # Iterate over this cell and neighbouring cells
+            for dx in (-1, 0, 1):
+                for dy in (-1, 0, 1):
+                    ng = (gx + dx, gy + dy)
+                    if ng not in grid:
                         continue
-                    neighbor_dots = grid[neighbor_y][neighbor_x]
-                    
+                    neighbor_dots = grid[ng]
                     for i in cell_dots:
                         for j in neighbor_dots:
-                            if i >= j:  # Avoid duplicate checks
+                            if i >= j:
                                 continue
-                            pair = (min(i, j), max(i, j))
+                            pair = (i, j)
                             if pair in checked_pairs:
                                 continue
                             checked_pairs.add(pair)
-                            
-                            dot1, dot2 = self.dots[i], self.dots[j]
+                            dot1 = self.dots[i]
+                            dot2 = self.dots[j]
                             if not (dot1["alive"] and dot2["alive"]):
                                 continue
-                                
-                            # Calculate distance between centers
-                            dx = dot1["x"] - dot2["x"]
-                            dy = dot1["y"] - dot2["y"]
-                            distance_sq = dx*dx + dy*dy
-                            collision_dist_sq = (dot1["radius"] + dot2["radius"]) ** 2
-                            
-                            # Check for collision (using squared distance for performance)
-                            if distance_sq < collision_dist_sq and distance_sq > 0:
-                                distance = math.sqrt(distance_sq)
-                                self._resolve_collision(dot1, dot2, dx, dy, distance)
+                            dx_ = dot1["x"] - dot2["x"]
+                            dy_ = dot1["y"] - dot2["y"]
+                            dist_sq = dx_ * dx_ + dy_ * dy_
+                            max_dist = dot1["radius"] + dot2["radius"]
+                            if dist_sq < max_dist * max_dist and dist_sq > 0:
+                                self._resolve_collision(dot1, dot2, dx_, dy_, math.sqrt(dist_sq))
 
     def _resolve_collision(self, dot1, dot2, dx, dy, distance):
         """Resolve collision between two dots."""
@@ -675,9 +681,9 @@ class ColorsLevel:
                         
                         # Create surface with alpha for shimmer effect
                         if i == 0:  # Outermost circle gets shimmer alpha
-                            dot_surface = pygame.Surface((gradient_radius * 2, gradient_radius * 2), pygame.SRCALPHA)
-                            pygame.draw.circle(dot_surface, (*blended_color, shimmer_alpha), 
-                                             (gradient_radius, gradient_radius), gradient_radius)
+                            # Use cached surface and adjust alpha on the fly
+                            dot_surface = self._get_circle_surface(blended_color, gradient_radius).copy()
+                            dot_surface.set_alpha(shimmer_alpha)
                             self.screen.blit(dot_surface, (draw_x - gradient_radius, draw_y - gradient_radius))
                         else:
                             pygame.draw.circle(self.screen, blended_color, 
