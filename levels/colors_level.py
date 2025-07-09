@@ -109,8 +109,8 @@ class ColorsLevel:
         for i, dot in enumerate(self.dots):
             if not dot["alive"]:
                 continue
-            grid_x = int(dot["x"] // self.grid_size)
-            grid_y = int(dot["y"] // self.grid_size)
+            grid_x = min(max(int(dot["x"] // self.grid_size), 0), self.grid_cols - 1)
+            grid_y = min(max(int(dot["y"] // self.grid_size), 0), self.grid_rows - 1)
             grid[(grid_x, grid_y)].append(i)
         return grid
         
