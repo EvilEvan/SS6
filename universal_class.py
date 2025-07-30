@@ -2,8 +2,7 @@ import pygame
 import random
 import math
 from settings import (
-    WHITE, BLACK, FLAME_COLORS,
-    SHAKE_DURATION_MISCLICK, SHAKE_MAGNITUDE_MISCLICK
+    WHITE, BLACK, FLAME_COLORS
 )
 
 class MultiTouchManager:
@@ -166,10 +165,6 @@ class GlassShatterManager:
         self.refresh_timer = 1500
         self.refresh_interval = 1500  # 30 seconds
         
-        # Screen shake state
-        self.shake_duration = 0
-        self.shake_magnitude = 0
-        
         # Event prevention flags
         self._processing_shatter = False
         self._last_crack_time = 0
@@ -181,8 +176,6 @@ class GlassShatterManager:
         self.background_shattered = False
         self.shatter_timer = 0
         self.refresh_timer = self.refresh_interval
-        self.shake_duration = 0
-        self.shake_magnitude = 0
         self._processing_shatter = False
         self._last_crack_time = 0
         self.current_background = WHITE
@@ -190,7 +183,7 @@ class GlassShatterManager:
         
     def handle_misclick(self, x, y):
         """
-        Handle a misclick event by creating a crack and triggering screen shake.
+        Handle a misclick event by creating a crack.
         Prevents duplicate events through cooldown system.
         
         Args:
@@ -204,10 +197,6 @@ class GlassShatterManager:
             return
             
         self._last_crack_time = current_time
-        
-        # Trigger screen shake
-        self.shake_duration = SHAKE_DURATION_MISCLICK
-        self.shake_magnitude = SHAKE_MAGNITUDE_MISCLICK
         
         # Create crack at click position
         self._create_crack(x, y)
@@ -314,21 +303,10 @@ class GlassShatterManager:
         pygame.time.set_timer(pygame.USEREVENT + 1, 100)  # 100ms delay
         
     def _create_shatter_particles(self):
-        """Create dramatic shatter particle effects."""
-        shatter_count = 200  # More particles for dramatic effect
-        for _ in range(shatter_count):
-            # Create glass particle
-            angle = random.uniform(0, math.pi * 2)
-            speed = random.uniform(2, 10)
-            self.particle_manager.create_particle(
-                self.width/2 + random.uniform(-self.width/3, self.width/3),  # Spread across screen
-                self.height/2 + random.uniform(-self.height/3, self.height/3),
-                (200, 200, 200),  # Glass color
-                random.uniform(5, 15),  # Size
-                math.cos(angle) * speed,  # X velocity
-                math.sin(angle) * speed,  # Y velocity
-                random.randint(60, 120)  # Longer duration for animation to be visible
-            )
+        """Create dramatic shatter particle effects - DISABLED."""
+        # Particle effects have been disabled per user request
+        # The shatter visual effect now only includes the crack display
+        pass
     
     def update(self):
         """
@@ -361,32 +339,19 @@ class GlassShatterManager:
                 self._create_refresh_particles()
                 
     def _create_refresh_particles(self):
-        """Create particle effect when screen refreshes."""
-        refresh_count = 50
-        for _ in range(refresh_count):
-            # Create sparkle particles across the screen
-            x = random.uniform(0, self.width)
-            y = random.uniform(0, self.height)
-            self.particle_manager.create_particle(
-                x, y,
-                (255, 255, 255),  # White sparkles
-                random.uniform(3, 8),  # Size
-                random.uniform(-1, 1),  # X velocity
-                random.uniform(-1, 1),  # Y velocity
-                random.randint(30, 60)  # Duration
-            )
+        """Create particle effect when screen refreshes - DISABLED."""
+        # Particle effects have been disabled per user request
+        # The refresh now only clears cracks without sparkle effects
+        pass
             
     def get_screen_shake_offset(self):
         """
         Get the current screen shake offset.
+        Screen shake has been disabled - always returns (0, 0).
         
         Returns:
-            tuple: (offset_x, offset_y) for screen shake effect
+            tuple: (offset_x, offset_y) - always (0, 0) since shake is disabled
         """
-        if self.shake_duration > 0:
-            offset_x = random.randint(-self.shake_magnitude, self.shake_magnitude)
-            offset_y = random.randint(-self.shake_magnitude, self.shake_magnitude)
-            return offset_x, offset_y
         return 0, 0
         
     def get_background_color(self):

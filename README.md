@@ -168,6 +168,10 @@ The game is built with a modular architecture:
 - **Resource Manager:** Handles fonts and display scaling
 - **Particle System:** Manages visual effects
 
+## Future Development
+
+A detailed design document for porting the game to HTML, CSS, and JavaScript can be found in `SuperStudentHTML.md`. This document outlines the plan for a future web-based version of the game.
+
 ## License
 
 This is an educational game project. Please respect any applicable licenses for the codebase and dependencies. 

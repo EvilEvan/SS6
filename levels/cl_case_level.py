@@ -280,18 +280,15 @@ class CLCaseLevel:
                     # Remove letter and update counts
                     self.letters.remove(letter_obj)
                     self.letters_destroyed += 1
-                    
-                    # Update target
+                      # Update target
                     if self.target_letter in self.letters_to_target:
                         self.letters_to_target.remove(self.target_letter)
                     if self.letters_to_target:
                         self.target_letter = self.letters_to_target[0]
-                    
                     break
                 else:
-                    # Add feedback for clicking wrong target
-                    self.glass_shatter_manager.shake_duration = 5
-                    self.glass_shatter_manager.shake_magnitude = 3
+                    # Add feedback for clicking wrong target - shake removed
+                    pass
         
         # If no target was hit, add a crack to the screen
         if not hit_target and self.game_started:
@@ -305,11 +302,10 @@ class CLCaseLevel:
                 letter_obj = {
                     "value": item_value,
                     "x": random.randint(50, self.width - 50),
-                    "y": -50,
-                    "rect": pygame.Rect(0, 0, 0, 0),  # Will be updated when drawn
+                    "y": -50,                    "rect": pygame.Rect(0, 0, 0, 0),  # Will be updated when drawn
                     "size": 240,  # Fixed size
                     "dx": random.choice([-1, -0.5, 0.5, 1]) * 1.5,
-                    "dy": random.choice([1, 1.5]) * 1.5,
+                    "dy": random.choice([1, 1.5]) * 1.5 * 1.2,  # 20% faster fall speed
                     "can_bounce": False,  # Start without bouncing
                     "mass": random.uniform(40, 60)  # Give items mass for collisions
                 }

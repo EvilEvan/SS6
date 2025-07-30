@@ -316,10 +316,9 @@ class AlphabetLevel:
                     "value": item_value,
                     "x": random.randint(50, self.width - 50),
                     "y": -50,
-                    "rect": pygame.Rect(0, 0, 0, 0),  # Will be updated when drawn
-                    "size": 240,  # Fixed size (doubled from 120 to 240 for 100% increase)
+                    "rect": pygame.Rect(0, 0, 0, 0),  # Will be updated when drawn                    "size": 240,  # Fixed size (doubled from 120 to 240 for 100% increase)
                     "dx": random.choice([-1, -0.5, 0.5, 1]) * 1.5,  # Slightly faster horizontal drift
-                    "dy": random.choice([1, 1.5]) * 1.5,  # Slightly faster fall speed
+                    "dy": random.choice([1, 1.5]) * 1.5 * 1.2,  # 20% faster fall speed
                     "can_bounce": False,  # Start without bouncing
                     "mass": random.uniform(40, 60)  # Give items mass for collisions
                 }

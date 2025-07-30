@@ -279,11 +279,10 @@ class NumbersLevel:
                 number_obj = {
                     "value": number_value,
                     "x": random.randint(50, self.width - 50),
-                    "y": -50,
-                    "rect": pygame.Rect(0, 0, 0, 0),  # Will be updated when drawn
+                    "y": -50,                    "rect": pygame.Rect(0, 0, 0, 0),  # Will be updated when drawn
                     "size": 240,  # Fixed size
                     "dx": random.choice([-1, -0.5, 0.5, 1]) * 1.5,  # Horizontal drift
-                    "dy": random.choice([1, 1.5]) * 1.5,  # Fall speed
+                    "dy": random.choice([1, 1.5]) * 1.5 * 1.2,  # 20% faster fall speed
                     "can_bounce": False,  # Start without bouncing
                     "mass": random.uniform(40, 60)  # Mass for collisions
                 }

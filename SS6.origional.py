@@ -3,8 +3,7 @@ import random
 import math
 from settings import (
     COLORS_COLLISION_DELAY, LEVEL_PROGRESS_PATH, WHITE, BLACK, FLAME_COLORS, LASER_EFFECTS,
-    LETTER_SPAWN_INTERVAL, SEQUENCES, GAME_MODES, GROUP_SIZE,
-    SHAKE_DURATION_MISCLICK, SHAKE_MAGNITUDE_MISCLICK
+    LETTER_SPAWN_INTERVAL, SEQUENCES, GAME_MODES, GROUP_SIZE
 )
 from Display_settings import (
     DISPLAY_MODES, DEFAULT_MODE, DISPLAY_SETTINGS_PATH,
@@ -134,8 +133,6 @@ for _ in range(100):  # Pre-create some particles to reuse
 
 # Global variables for effects and touches.
 particles = []
-shake_duration = 0
-shake_magnitude = 10
 
 # Declare explosions and lasers in global scope so they are available to all functions
 explosions = []

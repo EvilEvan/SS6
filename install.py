@@ -167,6 +167,23 @@ def main():
     print("=" * 40)
     
     input("Press Enter to exit installer...")
+
+    try:
+        script_path = os.path.abspath(__file__)
+        print(f"\nAttempting to remove installer: {script_path}")
+        if platform.system() == "Windows":
+            # Use timeout for a delay, then delete.
+            command = f'timeout /t 1 /nobreak > NUL && del "{script_path}"'
+            subprocess.Popen(command, shell=True, creationflags=0x08000000) # CREATE_NO_WINDOW
+        else:
+            # Use sleep for a delay, then delete.
+            command = f'sh -c "sleep 1 && rm \"{script_path}\""'
+            subprocess.Popen(command, shell=True)
+        print("✅ Installer script scheduled for removal.")
+    except Exception as e:
+        print(f"⚠️ Could not automatically remove installer: {e}")
+        print("   Please delete install.py manually.")
+
     return True
 
 if __name__ == "__main__":

@@ -280,7 +280,7 @@ class ShapesLevel:
                     "rect": pygame.Rect(0, 0, 0, 0),  # Will be updated when drawn
                     "size": 240,  # doubled from 120 to 240 for 100% increase
                     "dx": random.choice([-1, -0.5, 0.5, 1]) * 1.5,
-                    "dy": random.choice([1, 1.5]) * 1.5,
+                    "dy": random.choice([1, 1.5]) * 1.5 * 1.2,  # 20% faster fall speed
                     "can_bounce": False,
                     "mass": random.uniform(40, 60)
                 }

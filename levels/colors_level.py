@@ -51,8 +51,7 @@ class ColorsLevel:
         self.game_over_screen = game_over_screen_func
         self.explosions = explosions_list
         self.draw_explosion = draw_explosion_func
-        
-        # Colors configuration
+          # Colors configuration
         self.COLORS_LIST = [
             (0, 0, 255),    # Blue
             (255, 0, 0),    # Red
@@ -62,15 +61,11 @@ class ColorsLevel:
         ]
         self.color_names = ["Blue", "Red", "Green", "Yellow", "Purple"]
         
-        # PERFORMANCE OPTIMIZATION: Cache font objects
-        self.ghost_font = pygame.font.Font(None, 48)
-        
         # PERFORMANCE OPTIMIZATION: Spatial grid for collision detection
         self.grid_size = 120  # Grid cell size for spatial partitioning
         self.grid_cols = (width // self.grid_size) + 1
         self.grid_rows = (height // self.grid_size) + 1
-        
-        # VISUAL ENHANCEMENT: Shimmer and depth effects
+          # VISUAL ENHANCEMENT: Shimmer and depth effects
         self.frame_counter = 0
         self.shimmer_seeds = {}  # Per-dot shimmer seed for consistency
         # NEW: cache for pre-rendered circle surfaces
@@ -86,14 +81,13 @@ class ColorsLevel:
         self.mother_color = None
         self.mother_color_name = ""
         self.current_color_dots_destroyed = 0
-        self.dots_per_color = 5
+        self.dots_per_color = 2
         self.total_dots_destroyed = 0
         self.checkpoint_trigger = 10
         self.target_dots_left = 10
         self.dots = []
         self.dots_active = False
         self.overall_destroyed = 0
-        self.ghost_notification = None
         self.dots_before_checkpoint = 0
         self.collision_enabled = False
         self.collision_delay_counter = 0
@@ -257,30 +251,28 @@ class ColorsLevel:
         center = (self.width // 2, self.height // 2)
         disperse_frames = 30
         clock = pygame.time.Clock()
-        
-        # Create dispersion particles
+          # Create dispersion particles
         disperse_particles = []
-        for i in range(100):
+        for i in range(85):  # Reduced from 100 to 85 (15 fewer dots)
             angle = random.uniform(0, 2 * math.pi)
             disperse_particles.append({
                 "angle": angle,
                 "radius": 0,
                 "speed": random.uniform(12, 18),
-                "color": self.mother_color if i < 25 else None,
+                "color": self.mother_color if i < 17 else None,  # Reduced from 25 to 17 target dots
             })
-            
-        # Assign distractor colors
+              # Assign distractor colors
         distractor_colors = [c for idx, c in enumerate(self.COLORS_LIST) if idx != self.color_idx]
         num_distractor_colors = len(distractor_colors)
-        total_distractor_dots = 75
+        total_distractor_dots = 68  # Reduced from 75 to 68
         dots_per_color = total_distractor_dots // num_distractor_colors
         extra = total_distractor_dots % num_distractor_colors
-        idx = 25
+        idx = 17  # Updated from 25 to 17
         
         for color_idx, color in enumerate(distractor_colors):
             count = dots_per_color + (1 if color_idx < extra else 0)
             for _ in range(count):
-                if idx < 100:
+                if idx < 85:  # Updated from 100 to 85
                     disperse_particles[idx]["color"] = color
                     idx += 1
                     
@@ -436,9 +428,8 @@ class ColorsLevel:
         
         # Create explosion effect
         self.create_explosion(dot["x"], dot["y"], color=dot["color"], max_radius=60, duration=15)
-        
-        # Check if we need to switch the target color
-        if self.current_color_dots_destroyed >= 5:
+          # Check if we need to switch the target color
+        if self.current_color_dots_destroyed >= 2:
             self._switch_target_color()
             
         # Check for checkpoint trigger
@@ -454,23 +445,13 @@ class ColorsLevel:
         if not available_colors:
             self.used_colors = [self.color_idx]
             available_colors = [i for i in range(len(self.COLORS_LIST)) if i not in self.used_colors]
-            
-        # Select a random color from available colors
+              # Select a random color from available colors
         self.color_idx = random.choice(available_colors)
         self.used_colors.append(self.color_idx)
         
         self.mother_color = self.COLORS_LIST[self.color_idx]
         self.mother_color_name = self.color_names[self.color_idx]
         self.current_color_dots_destroyed = 0
-        
-        # Setup ghost notification
-        self.ghost_notification = {
-            "color": self.mother_color,
-            "duration": 100,
-            "alpha": 255,
-            "radius": 150,
-            "text": self.mother_color_name
-        }
         
         # PERFORMANCE OPTIMIZATION: Batch update target status and count in single loop
         target_count = 0
@@ -494,18 +475,8 @@ class ColorsLevel:
         if not checkpoint_result:
             self.running = False
             return
-            
-        # If Continue was selected, restore the saved dot count
+              # If Continue was selected, restore the saved dot count
         self.target_dots_left = self.dots_before_checkpoint
-        
-        # Show a ghost notification to remind of the current target color
-        self.ghost_notification = {
-            "color": self.mother_color,
-            "duration": 100,
-            "alpha": 255,
-            "radius": 150,
-            "text": self.mother_color_name
-        }
         
     def _update_dots(self):
         """Update dot positions and handle bouncing."""
@@ -716,54 +687,16 @@ class ColorsLevel:
         
         # Show sample target dot reference at top right
         self.hud_manager.display_sample_target(self.screen, self.mother_color, 48)
-        
-        # Display collision status
+          # Display collision status
         self.hud_manager.display_collision_status(
             self.screen, self.collision_enabled, 
             self.collision_delay_counter, self.collision_delay_frames
-        )
-        
-        # Draw ghost notification if active
-        self._draw_ghost_notification()
-        
-    def _draw_ghost_notification(self):
-        """Draw the ghost notification with optimized rendering."""
-        if self.ghost_notification and self.ghost_notification["duration"] > 0:
-            # PERFORMANCE OPTIMIZATION: Use cached font instead of creating new one
-            alpha = min(255, self.ghost_notification["alpha"])
-            
-            # Create a more efficient ghost effect without full-screen SRCALPHA surface
-            center_x = self.width // 2
-            center_y = self.height // 2
-            radius = self.ghost_notification["radius"]
-            
-            # Draw ghost dot with alpha blending
-            ghost_surface = pygame.Surface((radius * 2, radius * 2), pygame.SRCALPHA)
-            ghost_color = self.ghost_notification["color"] + (alpha,)
-            pygame.draw.circle(ghost_surface, ghost_color, (radius, radius), radius)
-            self.screen.blit(ghost_surface, (center_x - radius, center_y - radius))
-            
-            # Add "Target Color:" label above the dot
-            target_label = self.ghost_font.render("TARGET COLOR:", True, WHITE)
-            target_label_rect = target_label.get_rect(center=(center_x, center_y - radius - 20))
-            self.screen.blit(target_label, target_label_rect)
-            
-            # Add color name label below the dot
-            ghost_text = self.ghost_font.render(self.ghost_notification["text"], True, self.ghost_notification["color"])
-            ghost_text_rect = ghost_text.get_rect(center=(center_x, center_y + radius + 30))
-            self.screen.blit(ghost_text, ghost_text_rect)
-            
-            # Update notification
-            self.ghost_notification["duration"] -= 1
-            if self.ghost_notification["duration"] < 50:
-                self.ghost_notification["alpha"] -= 5
-        
+        )        
     def _generate_new_dots(self):
         """Generate new dots when target_dots_left reaches 0 with optimized placement."""
         new_dots_count = 10
         self.target_dots_left = new_dots_count
-        
-        # Select next color from unused colors first
+          # Select next color from unused colors first
         available_colors = [i for i in range(len(self.COLORS_LIST)) if i not in self.used_colors]
         
         if not available_colors:
@@ -772,18 +705,8 @@ class ColorsLevel:
             
         self.color_idx = random.choice(available_colors)
         self.used_colors.append(self.color_idx)
-        
         self.mother_color = self.COLORS_LIST[self.color_idx]
         self.mother_color_name = self.color_names[self.color_idx]
-        
-        # Create ghost notification
-        self.ghost_notification = {
-            "color": self.mother_color,
-            "duration": 100,
-            "alpha": 255,
-            "radius": 150,
-            "text": self.mother_color_name
-        }
         
         # Reset collision
         self.collision_enabled = False
@@ -793,7 +716,7 @@ class ColorsLevel:
         self.dots = [d for d in self.dots if d["alive"]]
         
         # PERFORMANCE OPTIMIZATION: Use grid-based placement algorithm
-        new_dots_needed = min(100 - len(self.dots), 50)  # Limit to prevent lag
+        new_dots_needed = min(85 - len(self.dots), 42)  # Reduced from 100 to 85, and from 50 to 42
         existing_target_dots = sum(1 for d in self.dots if d["color"] == self.mother_color)
         target_dots_needed = max(0, new_dots_count - existing_target_dots)
         

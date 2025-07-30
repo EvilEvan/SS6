@@ -24,5 +24,3 @@ SEQUENCES = {
 }
 GAME_MODES = ['alphabet', 'numbers', 'clcase', 'shapes', 'colors']
 GROUP_SIZE = 5
-SHAKE_DURATION_MISCLICK = 10
-SHAKE_MAGNITUDE_MISCLICK = 5
