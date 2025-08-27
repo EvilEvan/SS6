@@ -6,6 +6,7 @@ from settings import (
     LEVEL_PROGRESS_PATH
 )
 from universal_class import GlassShatterManager, HUDManager, MultiTouchManager
+from utils.level_resource_manager import LevelResourceManager
 from collections import defaultdict  # NEW: for sparse spatial grid
 
 
@@ -60,6 +61,19 @@ class ColorsLevel:
             (128, 0, 255),  # Purple
         ]
         self.color_names = ["Blue", "Red", "Green", "Yellow", "Purple"]
+        
+        # Initialize level resource manager for isolation
+        self.level_resources = LevelResourceManager(
+            level_id="colors",
+            width=width,
+            height=height,
+            max_effects={
+                "explosions": 30,
+                "particles": 200,
+                "lasers": 20,
+                "sounds": 10  # color names
+            }
+        )
         
         # PERFORMANCE OPTIMIZATION: Spatial grid for collision detection
         self.grid_size = 120  # Grid cell size for spatial partitioning
@@ -163,27 +177,40 @@ class ColorsLevel:
         Returns:
             bool: False to return to menu, True to restart level
         """
-        self.reset_level_state()
-        
-        # Initialize random starting color
-        self.color_idx = random.randint(0, len(self.COLORS_LIST) - 1)
-        self.used_colors.append(self.color_idx)
-        self.mother_color = self.COLORS_LIST[self.color_idx]
-        self.mother_color_name = self.color_names[self.color_idx]
-        
-        # Show mother dot vibration animation
-        if not self._show_mother_dot_vibration():
-            return False
+        try:
+            # Initialize level resources
+            if not self.level_resources.initialize():
+                print("Failed to initialize level resources")
+                return False
             
-        # Wait for click to start dispersion
-        if not self._wait_for_dispersion_start():
-            return False
+            # Preload color name sounds
+            self.level_resources.preload_level_sounds([name.lower() for name in self.color_names])
             
-        # Show dispersion animation and initialize dots
-        self._show_dispersion_animation()
-        
-        # Run main game loop
-        return self._main_game_loop()
+            self.reset_level_state()
+            
+            # Initialize random starting color
+            self.color_idx = random.randint(0, len(self.COLORS_LIST) - 1)
+            self.used_colors.append(self.color_idx)
+            self.mother_color = self.COLORS_LIST[self.color_idx]
+            self.mother_color_name = self.color_names[self.color_idx]
+            
+            # Show mother dot vibration animation
+            if not self._show_mother_dot_vibration():
+                return False
+                
+            # Wait for click to start dispersion
+            if not self._wait_for_dispersion_start():
+                return False
+                
+            # Show dispersion animation and initialize dots
+            self._show_dispersion_animation()
+            
+            # Run main game loop
+            return self._main_game_loop()
+            
+        finally:
+            # Ensure cleanup even if exception occurs
+            self._cleanup_level()
         
     def _show_mother_dot_vibration(self):
         """Show the mother dot vibration animation."""
@@ -365,6 +392,11 @@ class ColorsLevel:
     def _handle_events(self):
         """Handle pygame events for the colors level."""
         for event in pygame.event.get():
+            # Handle audio events from level resource manager
+            if event.type == pygame.USEREVENT + 1:
+                self.level_resources.handle_audio_event(event)
+                continue
+                
             if event.type == pygame.QUIT:
                 self.running = False
                 return False
@@ -426,8 +458,11 @@ class ColorsLevel:
         self.current_color_dots_destroyed += 1
         self.total_dots_destroyed += 1
         
-        # Create explosion effect
-        self.create_explosion(dot["x"], dot["y"], color=dot["color"], max_radius=60, duration=15)
+        # EDUCATIONAL FEATURE: Play pronunciation of the color name
+        self.level_resources.play_target_sound(self.mother_color_name.lower())
+        
+        # Create explosion effect using level resource manager
+        self.level_resources.create_explosion(dot["x"], dot["y"], color=dot["color"], max_radius=60, duration=15)
           # Check if we need to switch the target color
         if self.current_color_dots_destroyed >= 2:
             self._switch_target_color()
@@ -573,7 +608,7 @@ class ColorsLevel:
             collision_x = (dot1["x"] + dot2["x"]) / 2
             collision_y = (dot1["y"] + dot2["y"]) / 2
             for _ in range(3):
-                self.particle_manager.create_particle(
+                self.level_resources.create_particle(
                     collision_x, 
                     collision_y,
                     random.choice([dot1["color"], dot2["color"]]),
@@ -669,7 +704,10 @@ class ColorsLevel:
                                      (glow_radius, glow_radius), glow_radius)
                     self.screen.blit(glow_surface, (draw_x - glow_radius, draw_y - glow_radius))
                                   
-        # Draw explosions with offsets
+        # Draw explosions using level resource manager
+        self.level_resources.draw_effects(self.screen, offset_x, offset_y)
+        
+        # Draw legacy explosions if any remain
         for explosion in self.explosions[:]:
             if explosion["duration"] > 0:
                 self.draw_explosion(explosion, offset_x, offset_y)
@@ -805,4 +843,20 @@ class ColorsLevel:
                 return (x, y)
                 
         # Fallback to random position if grid method fails
-        return (random.randint(100, self.width - 100), random.randint(100, self.height - 100)) 
+        return (random.randint(100, self.width - 100), random.randint(100, self.height - 100))
+    
+    def _cleanup_level(self):
+        """Clean up all level resources to prevent bleeding into other levels."""
+        try:
+            # Clean up level resource manager
+            if hasattr(self, 'level_resources') and self.level_resources:
+                self.level_resources.cleanup()
+            
+            # Clear any remaining level-specific data
+            self.dots.clear()
+            self.surface_cache.clear()
+            self.shimmer_seeds.clear()
+            
+            print(f"ColorsLevel: Cleanup completed successfully")
+        except Exception as e:
+            print(f"ColorsLevel: Error during cleanup: {e}") 

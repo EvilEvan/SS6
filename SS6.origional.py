@@ -45,6 +45,7 @@ DISPLAY_MODE = load_display_mode()
 # Import ResourceManager
 from utils.resource_manager import ResourceManager
 from utils.particle_system import ParticleManager
+from utils.level_resource_manager import LevelResourceManager
 from universal_class import MultiTouchManager
 
 # Initialize particle manager globally
@@ -170,30 +171,75 @@ convergence_timer = 0
 #                          GAME LOGIC & EFFECTS                               #
 ###############################################################################
 
+def cleanup_global_resources():
+    """Thoroughly clean up all global resources to prevent level bleeding."""
+    global particles, explosions, lasers, charging_ability, charge_timer, charge_particles
+    global ability_target, convergence_target, convergence_timer, swirl_particles
+    global particles_converging, shake_duration, shake_magnitude
+    
+    # Log resource counts before cleanup
+    print(f"Cleanup: explosions={len(explosions)}, particles={len(particles)}, lasers={len(lasers)}, charge_particles={len(charge_particles)}")
+    
+    # Clear all global effect lists
+    particles.clear()
+    explosions.clear()
+    lasers.clear()
+    charge_particles.clear()
+    swirl_particles.clear()
+    
+    # Reset all global state variables
+    charging_ability = False
+    charge_timer = 0
+    ability_target = None
+    convergence_target = None
+    convergence_timer = 0
+    particles_converging = False
+    shake_duration = 0
+    shake_magnitude = 0
+    
+    # Clean up managers if they exist
+    if multi_touch_manager:
+        multi_touch_manager.reset()
+    if glass_shatter_manager:
+        glass_shatter_manager.reset()
+    if flamethrower_manager:
+        flamethrower_manager.clear()
+    if center_piece_manager:
+        center_piece_manager.reset()
+    if particle_manager:
+        particle_manager.particles.clear()
+    
+    print("Global resources cleaned up successfully")
+
+def monitor_resource_usage():
+    """Monitor and report current resource usage for debugging."""
+    global particles, explosions, lasers, charge_particles
+    
+    stats = {
+        "explosions": len(explosions),
+        "particles": len(particles),
+        "lasers": len(lasers),
+        "charge_particles": len(charge_particles),
+        "particle_manager_particles": len(particle_manager.particles) if particle_manager else 0
+    }
+    
+    print(f"Resource Usage: {stats}")
+    return stats
+
 def game_loop(mode):
     global shake_duration, shake_magnitude, particles, explosions, lasers, charging_ability, charge_timer, charge_particles, ability_target, convergence_target, convergence_timer, mother_radius, color_idx, color_sequence, next_color_index, target_dots_left, glass_shatter_manager, multi_touch_manager, flamethrower_manager, center_piece_manager
     
-    # Reset global effects that could persist between levels
-    shake_duration = 0
-    shake_magnitude = 0
-    particles = []
-    explosions = []
-    lasers = []
-    multi_touch_manager.reset()  # Clear any lingering active touches
-    glass_shatter_manager.reset()  # Reset glass shatter state
-    flamethrower_manager.clear()  # Clear any lingering flamethrower effects
-    center_piece_manager.reset()  # Reset center piece state
+    # CRITICAL: Clean up all global resources before starting new level
+    cleanup_global_resources()
+    
+    # Reset level-specific variables
     mother_radius = 90 # Default radius for mother dot in Colors level
     color_sequence = []
     color_idx = 0
     next_color_index = 0
     # Don't initialize target_dots_left here since it's handled in the colors level code
-    convergence_timer = 0
-    charge_timer = 0
-    convergence_target = None
-    charging_ability = False
-    charge_particles = []
-    ability_target = None
+    
+    print(f"Starting game loop for mode: {mode}")
     
     # Initialize player trail particles
     particles = []
@@ -562,9 +608,29 @@ if __name__ == "__main__":
         if mode is None:
             break
         
-        # Run the game loop and check its return value
-        restart_level = game_loop(mode)
+        # CRITICAL: Force global cleanup before starting any level
+        print(f"\n=== Starting Level: {mode} ===")
+        cleanup_global_resources()
         
-        # If game_loop returns True, restart the level for shapes level or colors level
-        while restart_level and (mode == "shapes" or mode == "colors"):
+        try:
+            # Run the game loop and check its return value
             restart_level = game_loop(mode)
+            
+            # If game_loop returns True, restart the level for shapes level or colors level
+            while restart_level and (mode == "shapes" or mode == "colors"):
+                print(f"\n=== Restarting Level: {mode} ===")
+                cleanup_global_resources()  # Clean up before restart
+                restart_level = game_loop(mode)
+        
+        except Exception as e:
+            print(f"Error during level execution: {e}")
+            cleanup_global_resources()  # Clean up on error
+        
+        finally:
+            # CRITICAL: Always clean up after level ends
+            print(f"\n=== Cleaning up after Level: {mode} ===")
+            cleanup_global_resources()
+            
+    # Final cleanup on exit
+    print("\n=== Final Cleanup ===")
+    cleanup_global_resources()

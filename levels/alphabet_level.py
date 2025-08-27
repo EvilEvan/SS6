@@ -9,6 +9,7 @@ from universal_class import (
     GlassShatterManager, HUDManager, MultiTouchManager, 
     CheckpointManager, FlamethrowerManager, CenterPieceManager
 )
+from utils.level_resource_manager import LevelResourceManager
 
 
 class AlphabetLevel:
@@ -79,6 +80,19 @@ class AlphabetLevel:
         self.groups = [self.sequence[i:i+GROUP_SIZE] for i in range(0, len(self.sequence), GROUP_SIZE)]
         self.TOTAL_LETTERS = len(self.sequence)
         
+        # Initialize level resource manager for isolation
+        self.level_resources = LevelResourceManager(
+            level_id="alphabet",
+            width=width,
+            height=height,
+            max_effects={
+                "explosions": 25,
+                "particles": 150,
+                "lasers": 15,
+                "sounds": 30
+            }
+        )
+        
         # Game state variables
         self.reset_level_state()
         
@@ -131,52 +145,73 @@ class AlphabetLevel:
         Returns:
             bool: False to return to menu, True to restart level
         """
-        self.reset_level_state()
-        
-        # Initialize background stars
-        stars = []
-        for _ in range(100):
-            x = random.randint(0, self.width)
-            y = random.randint(0, self.height)
-            radius = random.randint(2, 4)
-            stars.append([x, y, radius])
-            
-        # Main game loop
-        clock = pygame.time.Clock()
-        
-        while self.running:
-            # Handle events
-            if not self._handle_events():
+        try:
+            # Initialize level resources
+            if not self.level_resources.initialize():
+                print("Failed to initialize level resources")
                 return False
+            
+            # Preload alphabet sounds for better performance
+            self.level_resources.preload_level_sounds(self.sequence)
+            
+            self.reset_level_state()
+            
+            # Initialize background stars
+            stars = []
+            for _ in range(100):
+                x = random.randint(0, self.width)
+                y = random.randint(0, self.height)
+                radius = random.randint(2, 4)
+                stars.append([x, y, radius])
                 
-            # Spawn letters
-            if self.game_started:
-                self._spawn_letters()
+            # Main game loop
+            clock = pygame.time.Clock()
+            
+            while self.running:
+                # Handle events
+                if not self._handle_events():
+                    return False
+                    
+                # Spawn letters
+                if self.game_started:
+                    self._spawn_letters()
+                    
+                # Update physics and collisions
+                self._update_letters()
                 
-            # Update physics and collisions
-            self._update_letters()
-            
-            # Handle checkpoint logic
-            self._handle_checkpoint_logic()
-            
-            # Handle level progression
-            progression_result = self._handle_level_progression()
-            if progression_result is not None:
-                return progression_result
+                # Handle checkpoint logic
+                self._handle_checkpoint_logic()
                 
-            # Draw frame
-            self._draw_frame(stars)
+                # Handle level progression
+                progression_result = self._handle_level_progression()
+                if progression_result is not None:
+                    return progression_result
+                    
+                # Update level effects
+                self.level_resources.update_effects()
+                    
+                # Draw frame
+                self._draw_frame(stars)
+                
+                # Update frame counter and display
+                self.frame_count += 1
+                pygame.display.flip()
+                clock.tick(50)
+                
+            return False
             
-            # Update frame counter and display
-            self.frame_count += 1
-            pygame.display.flip()
-            clock.tick(50)
-            
-        return False
+        finally:
+            # Ensure cleanup even if exception occurs
+            self._cleanup_level()
         
     def _handle_events(self):
         """Handle all pygame events."""
         for event in pygame.event.get():
+            # Handle audio events from level resource manager
+            if event.type == pygame.USEREVENT + 1:
+                self.level_resources.handle_audio_event(event)
+                continue
+            
             # Handle glass shatter events first
             self.glass_shatter_manager.handle_event(event)
             
@@ -267,15 +302,19 @@ class AlphabetLevel:
                             hit_target = True  # Marked as hit
                             if letter_obj["value"] == self.target_letter:
                                 self.score += 10
+                                
+                                # EDUCATIONAL FEATURE: Play pronunciation of the letter
+                                self.level_resources.play_target_sound(letter_obj["value"])
+                                
                                 # Common destruction effects
-                                self.create_explosion(letter_obj["x"], letter_obj["y"])
+                                self.level_resources.create_explosion(letter_obj["x"], letter_obj["y"])
                                 self.create_flame_effect(self.player_x, self.player_y - 80, letter_obj["x"], letter_obj["y"])
                                 self.center_piece_manager.trigger_convergence(letter_obj["x"], letter_obj["y"])
-                                self.apply_explosion_effect(letter_obj["x"], letter_obj["y"], 150, self.letters)  # Apply push effect
+                                self.level_resources.apply_explosion_effect(letter_obj["x"], letter_obj["y"], 150, self.letters)  # Apply push effect
 
                                 # Add visual feedback particles
                                 for i in range(20):
-                                    self.create_particle(
+                                    self.level_resources.create_particle(
                                         letter_obj["x"], letter_obj["y"],
                                         random.choice(FLAME_COLORS),
                                         random.randint(40, 80),
@@ -551,7 +590,10 @@ class AlphabetLevel:
             else:
                 self.lasers.remove(laser)
 
-        # Process Explosions
+        # Process Explosions using level resource manager
+        self.level_resources.draw_effects(self.screen, offset_x, offset_y)
+        
+        # Process Legacy Explosions (if any remain from global effects)
         for explosion in self.explosions[:]:
             if explosion["duration"] > 0:
                 self.draw_explosion(explosion, offset_x, offset_y)  # Pass shake offset
@@ -562,4 +604,20 @@ class AlphabetLevel:
         # Display HUD
         self.hud_manager.display_info(self.screen, self.score, self.current_ability, 
                                      self.target_letter, self.overall_destroyed + self.letters_destroyed, 
-                                     self.TOTAL_LETTERS, "alphabet") 
+                                     self.TOTAL_LETTERS, "alphabet")
+    
+    def _cleanup_level(self):
+        """Clean up all level resources to prevent bleeding into other levels."""
+        try:
+            # Clean up level resource manager
+            if hasattr(self, 'level_resources') and self.level_resources:
+                self.level_resources.cleanup()
+            
+            # Clear any remaining level-specific data
+            self.letters.clear()
+            self.letters_to_spawn.clear()
+            self.letters_to_target.clear()
+            
+            print(f"AlphabetLevel: Cleanup completed successfully")
+        except Exception as e:
+            print(f"AlphabetLevel: Error during cleanup: {e}") 

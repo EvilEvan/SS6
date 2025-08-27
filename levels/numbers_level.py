@@ -9,6 +9,7 @@ from universal_class import (
     GlassShatterManager, HUDManager, MultiTouchManager, 
     CheckpointManager, FlamethrowerManager, CenterPieceManager
 )
+from utils.level_resource_manager import LevelResourceManager
 
 
 class NumbersLevel:
@@ -79,6 +80,19 @@ class NumbersLevel:
         self.groups = [self.sequence[i:i+GROUP_SIZE] for i in range(0, len(self.sequence), GROUP_SIZE)]
         self.TOTAL_NUMBERS = len(self.sequence)
         
+        # Initialize level resource manager for isolation
+        self.level_resources = LevelResourceManager(
+            level_id="numbers",
+            width=width,
+            height=height,
+            max_effects={
+                "explosions": 25,
+                "particles": 150,
+                "lasers": 15,
+                "sounds": 15  # 1-10 numbers + few extras
+            }
+        )
+        
         # Game state variables
         self.reset_level_state()
         
@@ -131,52 +145,74 @@ class NumbersLevel:
         Returns:
             bool: False to return to menu, True to restart level
         """
-        self.reset_level_state()
-        
-        # Initialize background stars
-        stars = []
-        for _ in range(100):
-            x = random.randint(0, self.width)
-            y = random.randint(0, self.height)
-            radius = random.randint(2, 4)
-            stars.append([x, y, radius])
-            
-        # Main game loop
-        clock = pygame.time.Clock()
-        
-        while self.running:
-            # Handle events
-            if not self._handle_events():
+        try:
+            # Initialize level resources
+            if not self.level_resources.initialize():
+                print("Failed to initialize level resources")
                 return False
+            
+            # Preload number sounds - convert numbers to words
+            number_words = ["one", "two", "three", "four", "five", "six", "seven", "eight", "nine", "ten"]
+            self.level_resources.preload_level_sounds(number_words)
+            
+            self.reset_level_state()
+            
+            # Initialize background stars
+            stars = []
+            for _ in range(100):
+                x = random.randint(0, self.width)
+                y = random.randint(0, self.height)
+                radius = random.randint(2, 4)
+                stars.append([x, y, radius])
                 
-            # Spawn numbers
-            if self.game_started:
-                self._spawn_numbers()
+            # Main game loop
+            clock = pygame.time.Clock()
+            
+            while self.running:
+                # Handle events
+                if not self._handle_events():
+                    return False
+                    
+                # Spawn numbers
+                if self.game_started:
+                    self._spawn_numbers()
+                    
+                # Update physics and collisions
+                self._update_numbers()
                 
-            # Update physics and collisions
-            self._update_numbers()
-            
-            # Handle checkpoint logic
-            self._handle_checkpoint_logic()
-            
-            # Handle level progression
-            progression_result = self._handle_level_progression()
-            if progression_result is not None:
-                return progression_result
+                # Handle checkpoint logic
+                self._handle_checkpoint_logic()
                 
-            # Draw frame
-            self._draw_frame(stars)
+                # Handle level progression
+                progression_result = self._handle_level_progression()
+                if progression_result is not None:
+                    return progression_result
+                    
+                # Update level effects
+                self.level_resources.update_effects()
+                    
+                # Draw frame
+                self._draw_frame(stars)
+                
+                # Update frame counter and display
+                self.frame_count += 1
+                pygame.display.flip()
+                clock.tick(50)
+                
+            return False
             
-            # Update frame counter and display
-            self.frame_count += 1
-            pygame.display.flip()
-            clock.tick(50)
-            
-        return False
+        finally:
+            # Ensure cleanup even if exception occurs
+            self._cleanup_level()
         
     def _handle_events(self):
         """Handle all pygame events."""
         for event in pygame.event.get():
+            # Handle audio events from level resource manager
+            if event.type == pygame.USEREVENT + 1:
+                self.level_resources.handle_audio_event(event)
+                continue
+            
             # Handle glass shatter events first
             self.glass_shatter_manager.handle_event(event)
             
@@ -236,15 +272,23 @@ class NumbersLevel:
                 hit_target = True  # Marked as hit
                 if number_obj["value"] == self.target_number:
                     self.score += 10
+                    
+                    # EDUCATIONAL FEATURE: Play pronunciation of the number
+                    # Convert number to word for pronunciation
+                    number_words = {"1": "one", "2": "two", "3": "three", "4": "four", "5": "five", 
+                                   "6": "six", "7": "seven", "8": "eight", "9": "nine", "10": "ten"}
+                    number_word = number_words.get(str(number_obj["value"]), str(number_obj["value"]))
+                    self.level_resources.play_target_sound(number_word)
+                    
                     # Common destruction effects
-                    self.create_explosion(number_obj["x"], number_obj["y"])
+                    self.level_resources.create_explosion(number_obj["x"], number_obj["y"])
                     self.create_flame_effect(self.player_x, self.player_y - 80, number_obj["x"], number_obj["y"])
                     self.center_piece_manager.trigger_convergence(number_obj["x"], number_obj["y"])
-                    self.apply_explosion_effect(number_obj["x"], number_obj["y"], 150, self.numbers)
+                    self.level_resources.apply_explosion_effect(number_obj["x"], number_obj["y"], 150, self.numbers)
 
                     # Add visual feedback particles
                     for i in range(20):
-                        self.create_particle(
+                        self.level_resources.create_particle(
                             number_obj["x"], number_obj["y"],
                             random.choice(FLAME_COLORS),
                             random.randint(40, 80),
@@ -537,9 +581,29 @@ class NumbersLevel:
                 
     def _process_explosions(self, offset_x, offset_y):
         """Process explosion effects."""
+        # Use level resource manager for explosions
+        self.level_resources.draw_effects(self.screen, offset_x, offset_y)
+        
+        # Process legacy explosions if any remain
         for explosion in self.explosions[:]:
             if explosion["duration"] > 0:
                 self.draw_explosion(explosion, offset_x, offset_y)
                 explosion["duration"] -= 1
             else:
-                self.explosions.remove(explosion) 
+                self.explosions.remove(explosion)
+    
+    def _cleanup_level(self):
+        """Clean up all level resources to prevent bleeding into other levels."""
+        try:
+            # Clean up level resource manager
+            if hasattr(self, 'level_resources') and self.level_resources:
+                self.level_resources.cleanup()
+            
+            # Clear any remaining level-specific data
+            self.numbers.clear()
+            self.numbers_to_spawn.clear()
+            self.numbers_to_target.clear()
+            
+            print(f"NumbersLevel: Cleanup completed successfully")
+        except Exception as e:
+            print(f"NumbersLevel: Error during cleanup: {e}") 
