@@ -4,6 +4,7 @@ import time
 from typing import List, Dict, Optional, Any
 from utils.audio_manager import AudioManager
 from utils.particle_system import ParticleManager
+from utils.sound_effects_manager import SoundEffectsManager
 
 
 class LevelResourceManager:
@@ -44,6 +45,7 @@ class LevelResourceManager:
         # Managers
         self.audio_manager: Optional[AudioManager] = None
         self.particle_manager: Optional[ParticleManager] = None
+        self.sound_effects_manager: Optional[SoundEffectsManager] = None
         
         # Performance tracking
         self.creation_time = time.time()
@@ -68,6 +70,9 @@ class LevelResourceManager:
             # Initialize particle manager with level-specific limits
             self.particle_manager = ParticleManager(max_particles=self.max_effects["particles"])
             self.particle_manager.set_culling_distance(self.width)
+            
+            # Initialize sound effects manager
+            self.sound_effects_manager = SoundEffectsManager()
             
             self.initialized = True
             print(f"LevelResourceManager: Initialized for level '{self.level_id}'")
@@ -174,13 +179,52 @@ class LevelResourceManager:
         Returns:
             bool: True if sound played successfully
         """
-        if not self.initialized or not self.audio_manager:
+        print(f"[DEBUG] play_target_sound called for: '{target}'")
+        if not self.initialized:
+            print(f"[DEBUG] LevelResourceManager not initialized")
             return False
             
-        success = self.audio_manager.play_pronunciation(target, language)
-        if success:
-            self.resource_stats["sounds_played"] += 1
-        return success
+        if not self.audio_manager:
+            print(f"[DEBUG] AudioManager not available - continuing silently")
+            return True  # Graceful degradation: continue without sound
+            
+        try:
+            print(f"[DEBUG] Calling audio_manager.play_pronunciation for: '{target}'")
+            success = self.audio_manager.play_pronunciation(target, language)
+            print(f"[DEBUG] play_pronunciation returned: {success}")
+            if success:
+                self.resource_stats["sounds_played"] += 1
+            return success
+        except Exception as e:
+            print(f"LevelResourceManager: Audio error - continuing silently: {e}")
+            return True  # Graceful degradation: don't break gameplay
+    
+    def play_destruction_sound(self, target_type: str = "default") -> bool:
+        """
+        Play a fun destruction sound effect when a target is destroyed.
+        
+        Args:
+            target_type (str): Type of target destroyed (for future customization)
+            
+        Returns:
+            bool: True if sound played successfully
+        """
+        if not self.initialized:
+            return True  # Graceful degradation: continue without sound
+            
+        if not self.sound_effects_manager:
+            print("[DEBUG] SoundEffectsManager not available - continuing silently")
+            return True  # Graceful degradation: don't break gameplay
+        
+        try:
+            success = self.sound_effects_manager.play_destruction_sound(target_type)
+            if success:
+                self.resource_stats["sounds_played"] += 1
+                print(f"[DEBUG] Played destruction sound for: {target_type}")
+            return True  # Always return True for graceful degradation
+        except Exception as e:
+            print(f"LevelResourceManager: Sound effect error - continuing silently: {e}")
+            return True  # Graceful degradation: continue gameplay
     
     def preload_level_sounds(self, targets: List[str], language: str = "en") -> int:
         """
@@ -363,6 +407,10 @@ class LevelResourceManager:
             # Particle manager cleanup
             self.particle_manager.particles.clear()
             self.particle_manager = None
+            
+        if self.sound_effects_manager:
+            self.sound_effects_manager.cleanup()
+            self.sound_effects_manager = None
         
         self.initialized = False
         

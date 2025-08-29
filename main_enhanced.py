@@ -18,7 +18,6 @@ import traceback
 import os
 import pathlib
 import gc
-import tempfile
 from typing import Optional
 
 # Ensure repository root is on sys.path for imports
@@ -65,55 +64,6 @@ class SuperStudentGame:
         self.display_mode = DEFAULT_MODE
         self.error_count = 0
         self.max_errors = 5  # Maximum errors before graceful shutdown
-        self.lock_file = None
-        self.lock_file_path = os.path.join(tempfile.gettempdir(), "ss6_game.lock")
-        
-    def check_single_instance(self) -> bool:
-        """
-        Check if another instance is already running.
-        
-        Returns:
-            bool: True if this is the only instance, False otherwise
-        """
-        try:
-            if os.path.exists(self.lock_file_path):
-                # Check if the process is still running
-                try:
-                    with open(self.lock_file_path, 'r') as f:
-                        pid = int(f.read().strip())
-                    
-                    # Check if process exists (Windows-compatible)
-                    import psutil
-                    if psutil.pid_exists(pid):
-                        print(f"Another SS6 instance is already running (PID: {pid})")
-                        return False
-                    else:
-                        # Stale lock file, remove it
-                        os.remove(self.lock_file_path)
-                except (ValueError, FileNotFoundError):
-                    # Invalid or missing lock file
-                    if os.path.exists(self.lock_file_path):
-                        os.remove(self.lock_file_path)
-            
-            # Create lock file
-            with open(self.lock_file_path, 'w') as f:
-                f.write(str(os.getpid()))
-            
-            self.lock_file = self.lock_file_path
-            return True
-            
-        except Exception as e:
-            print(f"Warning: Could not check for single instance: {e}")
-            return True  # Allow to run if check fails
-    
-    def cleanup_lock_file(self):
-        """Clean up the lock file on exit."""
-        try:
-            if self.lock_file and os.path.exists(self.lock_file):
-                os.remove(self.lock_file)
-                print("Lock file cleaned up")
-        except Exception as e:
-            print(f"Warning: Could not clean up lock file: {e}")
         
     def initialize_pygame(self) -> bool:
         """
@@ -170,7 +120,7 @@ class SuperStudentGame:
             resources = self.resource_manager.initialize_game_resources()
             
             # Initialize particle manager with optimized settings
-            max_particles = MAX_PARTICLES[self.display_mode]
+            max_particles = PARTICLES_SETTINGS[self.display_mode]
             self.particle_manager = ParticleManager(max_particles=max_particles)
             self.particle_manager.set_culling_distance(self.width)
             
@@ -187,7 +137,7 @@ class SuperStudentGame:
                 'flamethrower': FlamethrowerManager(),
                 'center_piece': CenterPieceManager(
                     self.width, self.height, self.display_mode, 
-                    self.particle_manager, MAX_SWIRL_PARTICLES[self.display_mode], 
+                    self.particle_manager, SWIRL_SETTINGS[self.display_mode], 
                     self.resource_manager
                 )
             }
@@ -223,13 +173,7 @@ class SuperStudentGame:
             
             # Cleanup particle systems
             if hasattr(self, 'particle_manager') and self.particle_manager:
-                if hasattr(self.particle_manager, 'cleanup'):
-                    self.particle_manager.cleanup()
-                else:
-                    # Fallback for older particle manager
-                    self.particle_manager.particles.clear()
-                    for particle in self.particle_manager.particle_pool:
-                        particle["active"] = False
+                self.particle_manager.clear()
             
             # Cleanup managers
             for manager_name, manager in self.managers.items():
@@ -238,9 +182,6 @@ class SuperStudentGame:
             
             # Force garbage collection
             gc.collect()
-            
-            # Clean up lock file
-            self.cleanup_lock_file()
             
             print("Resource cleanup completed")
             
@@ -374,12 +315,6 @@ class SuperStudentGame:
             print("=" * 60)
             print("SUPER STUDENT 6 - ENHANCED EDITION")
             print("=" * 60)
-            
-            # Check for single instance
-            if not self.check_single_instance():
-                print("Another instance is already running. Exiting.")
-                return 1
-            
             print("Initializing game systems...")
             
             # Initialize pygame

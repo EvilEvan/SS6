@@ -114,4 +114,18 @@ class ParticleManager:
                 # Create surface with alpha for transparency
                 particle_surface = pygame.Surface((size * 2, size * 2), pygame.SRCALPHA)
                 pygame.draw.circle(particle_surface, color_with_alpha, (size, size), size)
-                screen.blit(particle_surface, (draw_x - size, draw_y - size)) 
+                screen.blit(particle_surface, (draw_x - size, draw_y - size))
+    
+    def cleanup(self):
+        """Clean up all particles and reset the system."""
+        try:
+            # Deactivate all particles
+            for particle in self.particles:
+                particle["active"] = False
+            
+            # Clear particle list
+            self.particles.clear()
+            
+            print("ParticleManager: Cleanup completed")
+        except Exception as e:
+            print(f"ParticleManager: Error during cleanup: {e}") 

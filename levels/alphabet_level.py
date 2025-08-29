@@ -220,9 +220,9 @@ class AlphabetLevel:
                 return False
             if event.type == pygame.KEYDOWN:
                 if event.key == pygame.K_ESCAPE:
-                    # Exit the game completely instead of just returning to level menu
-                    pygame.quit()
-                    exit()
+                    print("[DEBUG] ESC key pressed in alphabet level - returning to level select")
+                    self.running = False
+                    return False
                 if event.key == pygame.K_SPACE:
                     self.current_ability = self.abilities[(self.abilities.index(self.current_ability) + 1) % len(self.abilities)]
                     
@@ -521,8 +521,17 @@ class AlphabetLevel:
         # Update glass shatter manager
         self.glass_shatter_manager.update()
         
-        # Apply screen shake if active
-        offset_x, offset_y = self.glass_shatter_manager.get_screen_shake_offset()
+        # Apply screen shake if active - SUPER DEFENSIVE
+        try:
+            offset_x, offset_y = self.glass_shatter_manager.get_screen_shake_offset()
+        except AttributeError as e:
+            print(f"[DEBUG] Glass shatter manager attribute error in alphabet level: {e}")
+            # Initialize missing attributes and try again
+            if not hasattr(self.glass_shatter_manager, 'shake_duration'):
+                self.glass_shatter_manager.shake_duration = 0
+            if not hasattr(self.glass_shatter_manager, 'shake_magnitude'):
+                self.glass_shatter_manager.shake_magnitude = 0
+            offset_x, offset_y = 0, 0  # Safe fallback
 
         # Fill background based on shatter state
         self.screen.fill(self.glass_shatter_manager.get_background_color())

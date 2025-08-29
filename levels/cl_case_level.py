@@ -204,8 +204,9 @@ class CLCaseLevel:
             
         if event.type == pygame.KEYDOWN:
             if event.key == pygame.K_ESCAPE:
-                pygame.quit()
-                exit()
+                print("[DEBUG] ESC key pressed in cl_case level - returning to level select")
+                self.running = False
+                return True
             if event.key == pygame.K_SPACE:
                 self.current_ability = self.abilities[(self.abilities.index(self.current_ability) + 1) % len(self.abilities)]
                 
@@ -473,8 +474,17 @@ class CLCaseLevel:
 
     def _draw_frame(self, stars):
         """Draw a complete frame of the C/L Case level."""
-        # Apply screen shake if active
-        offset_x, offset_y = self.glass_shatter_manager.get_screen_shake_offset()
+        # Apply screen shake if active - SUPER DEFENSIVE
+        try:
+            offset_x, offset_y = self.glass_shatter_manager.get_screen_shake_offset()
+        except AttributeError as e:
+            print(f"[DEBUG] Glass shatter manager attribute error in C/L case level: {e}")
+            # Initialize missing attributes and try again
+            if not hasattr(self.glass_shatter_manager, 'shake_duration'):
+                self.glass_shatter_manager.shake_duration = 0
+            if not hasattr(self.glass_shatter_manager, 'shake_magnitude'):
+                self.glass_shatter_manager.shake_magnitude = 0
+            offset_x, offset_y = 0, 0  # Safe fallback
         
         # Update glass shatter manager
         self.glass_shatter_manager.update()

@@ -145,120 +145,194 @@ class NumbersLevel:
         Returns:
             bool: False to return to menu, True to restart level
         """
+        print("[DEBUG] NumbersLevel.run() - Entry point")
         try:
             # Initialize level resources
+            print("[DEBUG] Initializing level resources...")
             if not self.level_resources.initialize():
-                print("Failed to initialize level resources")
+                print("[DEBUG] Failed to initialize level resources")
                 return False
+            print("[DEBUG] Level resources initialized successfully")
             
             # Preload number sounds - convert numbers to words
+            print("[DEBUG] Starting audio preloading...")
             number_words = ["one", "two", "three", "four", "five", "six", "seven", "eight", "nine", "ten"]
-            self.level_resources.preload_level_sounds(number_words)
+            preload_result = self.level_resources.preload_level_sounds(number_words)
+            print(f"[DEBUG] Audio preloading completed: {preload_result}")
             
+            print("[DEBUG] Resetting level state...")
             self.reset_level_state()
+            print("[DEBUG] Level state reset complete")
             
             # Initialize background stars
+            print("[DEBUG] Creating background stars...")
             stars = []
             for _ in range(100):
                 x = random.randint(0, self.width)
                 y = random.randint(0, self.height)
                 radius = random.randint(2, 4)
                 stars.append([x, y, radius])
+            print("[DEBUG] Background stars created")
                 
             # Main game loop
+            print("[DEBUG] Starting main game loop...")
             clock = pygame.time.Clock()
             
+            print(f"Numbers level initialized. Waiting for first click/touch to start...")
+            print(f"Target sequence: {self.sequence}")
+            print(f"Current target: {self.target_number}")
+            
+            frame_count = 0
             while self.running:
+                frame_count += 1
+                if frame_count % 300 == 0:  # Debug every 5 seconds at 60fps
+                    print(f"[DEBUG] Game loop running - Frame {frame_count}, Running: {self.running}")
+                
                 # Handle events
-                if not self._handle_events():
-                    return False
+                try:
+                    if not self._handle_events():
+                        print("[DEBUG] Event handler requested exit")
+                        return False
+                except Exception as e:
+                    print(f"[DEBUG] Error in event handling: {e}")
                     
                 # Spawn numbers
                 if self.game_started:
-                    self._spawn_numbers()
+                    try:
+                        self._spawn_numbers()
+                    except Exception as e:
+                        print(f"[DEBUG] Error in spawn_numbers: {e}")
                     
                 # Update physics and collisions
-                self._update_numbers()
+                try:
+                    self._update_numbers()
+                except Exception as e:
+                    print(f"[DEBUG] Error in update_numbers: {e}")
                 
                 # Handle checkpoint logic
-                self._handle_checkpoint_logic()
+                try:
+                    self._handle_checkpoint_logic()
+                except Exception as e:
+                    print(f"[DEBUG] Error in checkpoint_logic: {e}")
                 
                 # Handle level progression
-                progression_result = self._handle_level_progression()
-                if progression_result is not None:
-                    return progression_result
+                try:
+                    progression_result = self._handle_level_progression()
+                    if progression_result is not None:
+                        print(f"[DEBUG] Level progression returned: {progression_result}")
+                        return progression_result
+                except Exception as e:
+                    print(f"[DEBUG] Error in level_progression: {e}")
                     
                 # Update level effects
-                self.level_resources.update_effects()
+                try:
+                    self.level_resources.update_effects()
+                except Exception as e:
+                    print(f"[DEBUG] Error in update_effects: {e}")
                     
                 # Draw frame
-                self._draw_frame(stars)
+                try:
+                    self._draw_frame(stars)
+                except Exception as e:
+                    print(f"[DEBUG] Error in draw_frame: {e}")
                 
                 # Update frame counter and display
-                self.frame_count += 1
-                pygame.display.flip()
-                clock.tick(50)
+                try:
+                    self.frame_count += 1
+                    pygame.display.flip()
+                    clock.tick(50)
+                except Exception as e:
+                    print(f"[DEBUG] Error in display update: {e}")
                 
+            print("[DEBUG] Main game loop exited")
             return False
             
+        except Exception as e:
+            print(f"[DEBUG] Exception in NumbersLevel.run(): {e}")
+            import traceback
+            traceback.print_exc()
+            return False
         finally:
             # Ensure cleanup even if exception occurs
+            print("[DEBUG] Performing level cleanup...")
             self._cleanup_level()
+            print("[DEBUG] Level cleanup completed")
         
     def _handle_events(self):
         """Handle all pygame events."""
-        for event in pygame.event.get():
-            # Handle audio events from level resource manager
-            if event.type == pygame.USEREVENT + 1:
-                self.level_resources.handle_audio_event(event)
-                continue
-            
-            # Handle glass shatter events first
-            self.glass_shatter_manager.handle_event(event)
-            
-            if event.type == pygame.QUIT:
-                self.running = False
-                return False
-            if event.type == pygame.KEYDOWN:
-                if event.key == pygame.K_ESCAPE:
-                    # Exit the game completely instead of just returning to level menu
-                    pygame.quit()
-                    exit()
-                if event.key == pygame.K_SPACE:
-                    self.current_ability = self.abilities[(self.abilities.index(self.current_ability) + 1) % len(self.abilities)]
-                    
-            if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
-                if not self.mouse_down:
-                    self.mouse_press_time = pygame.time.get_ticks()
-                    self.mouse_down = True
-                    
-            if event.type == pygame.MOUSEBUTTONUP and event.button == 1:
-                release_time = pygame.time.get_ticks()
-                self.mouse_down = False
-                duration = release_time - self.mouse_press_time
-                if duration <= 1000:  # Check if it's a click (not a hold)
-                    self.click_count += 1
+        events = pygame.event.get()
+        if len(events) > 0:
+            print(f"[DEBUG] Processing {len(events)} events")
+        
+        for event in events:
+            try:
+                # Handle audio events from level resource manager
+                if event.type == pygame.USEREVENT + 1:
+                    print(f"[DEBUG] Handling audio event: {getattr(event, 'action', 'unknown')}")
+                    self.level_resources.handle_audio_event(event)
+                    continue
+                
+                # Handle glass shatter events first
+                self.glass_shatter_manager.handle_event(event)
+                
+                if event.type == pygame.QUIT:
+                    print("[DEBUG] QUIT event received")
+                    self.running = False
+                    return False
+                if event.type == pygame.KEYDOWN:
+                    print(f"[DEBUG] KEYDOWN event: {event.key}")
+                    if event.key == pygame.K_ESCAPE:
+                        print("[DEBUG] ESC key pressed - returning to level select")
+                        # Return to level select screen instead of exiting
+                        self.running = False
+                        return False
+                    if event.key == pygame.K_SPACE:
+                        print("[DEBUG] SPACE key pressed - changing ability")
+                        self.current_ability = self.abilities[(self.abilities.index(self.current_ability) + 1) % len(self.abilities)]
+                        
+                if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
+                    print(f"[DEBUG] Mouse button down at {pygame.mouse.get_pos()}")
+                    if not self.mouse_down:
+                        self.mouse_press_time = pygame.time.get_ticks()
+                        self.mouse_down = True
+                        
+                if event.type == pygame.MOUSEBUTTONUP and event.button == 1:
+                    print(f"[DEBUG] Mouse button up at {pygame.mouse.get_pos()}")
+                    release_time = pygame.time.get_ticks()
+                    self.mouse_down = False
+                    duration = release_time - self.mouse_press_time
+                    if duration <= 1000:  # Check if it's a click (not a hold)
+                        self.click_count += 1
+                        if not self.game_started:
+                            self.game_started = True
+                            print("GAME STARTED! Numbers will begin spawning...")
+                        else:
+                            click_x, click_y = pygame.mouse.get_pos()
+                            print(f"[DEBUG] Handling click at ({click_x}, {click_y})")
+                            self._handle_click(click_x, click_y)
+                            
+                elif event.type == pygame.FINGERDOWN:
+                    print(f"[DEBUG] Touch down event")
+                    touch_result = self.multi_touch_manager.handle_touch_down(event)
+                    if touch_result is None:
+                        continue  # Touch was ignored due to cooldown
+                    touch_id, touch_x, touch_y = touch_result
                     if not self.game_started:
                         self.game_started = True
+                        print("GAME STARTED via touch! Numbers will begin spawning...")
                     else:
-                        click_x, click_y = pygame.mouse.get_pos()
-                        self._handle_click(click_x, click_y)
+                        print(f"[DEBUG] Handling touch at ({touch_x}, {touch_y})")
+                        self._handle_click(touch_x, touch_y)
                         
-            elif event.type == pygame.FINGERDOWN:
-                touch_result = self.multi_touch_manager.handle_touch_down(event)
-                if touch_result is None:
-                    continue  # Touch was ignored due to cooldown
-                touch_id, touch_x, touch_y = touch_result
-                if not self.game_started:
-                    self.game_started = True
-                else:
-                    self._handle_click(touch_x, touch_y)
-                    
-            elif event.type == pygame.FINGERUP:
-                touch_result = self.multi_touch_manager.handle_touch_up(event)
-                if touch_result is not None:
-                    touch_id, last_x, last_y = touch_result
-                    
+                elif event.type == pygame.FINGERUP:
+                    print(f"[DEBUG] Touch up event")
+                    touch_result = self.multi_touch_manager.handle_touch_up(event)
+                    if touch_result is not None:
+                        touch_id, last_x, last_y = touch_result
+                        
+            except Exception as e:
+                print(f"[DEBUG] Error processing event {event.type}: {e}")
+                
         return True
         
     def _handle_click(self, click_x, click_y):
@@ -490,11 +564,28 @@ class NumbersLevel:
         
     def _draw_frame(self, stars):
         """Draw the complete game frame."""
-        # Apply screen shake if active
-        offset_x, offset_y = self.glass_shatter_manager.get_screen_shake_offset()
+        # Apply screen shake if active - SUPER DEFENSIVE
+        try:
+            offset_x, offset_y = self.glass_shatter_manager.get_screen_shake_offset()
+        except AttributeError as e:
+            print(f"[DEBUG] Glass shatter manager attribute error in numbers level: {e}")
+            # Initialize missing attributes and try again
+            if not hasattr(self.glass_shatter_manager, 'shake_duration'):
+                self.glass_shatter_manager.shake_duration = 0
+            if not hasattr(self.glass_shatter_manager, 'shake_magnitude'):
+                self.glass_shatter_manager.shake_magnitude = 0
+            offset_x, offset_y = 0, 0  # Safe fallback
 
-        # Update glass shatter manager
-        self.glass_shatter_manager.update()
+        # Update glass shatter manager - SUPER DEFENSIVE
+        try:
+            self.glass_shatter_manager.update()
+        except AttributeError as e:
+            print(f"[DEBUG] Glass shatter manager update error in numbers level: {e}")
+            # Initialize missing attributes if needed
+            if not hasattr(self.glass_shatter_manager, 'shake_duration'):
+                self.glass_shatter_manager.shake_duration = 0
+            if not hasattr(self.glass_shatter_manager, 'shake_magnitude'):
+                self.glass_shatter_manager.shake_magnitude = 0
         
         # Fill background based on shatter state
         self.screen.fill(self.glass_shatter_manager.get_background_color())

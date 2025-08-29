@@ -45,12 +45,16 @@ class AudioManager:
         self.tts_engine = None
         self.temp_dir = tempfile.mkdtemp(prefix="ss6_audio_")
         self.executor = ThreadPoolExecutor(max_workers=max_workers)
+        self._shutdown_requested = False
         
-        # Audio settings
+        # Audio settings with degradation tracking
         self.enabled = True
+        self.degraded_mode = False  # Track if running in degraded mode
+        self.degradation_reason = ""  # Track why we degraded
         self.tts_method = "offline"  # "offline", "online", "prerecorded"
         self.language = "en"
-        self.speech_rate = 150
+        self.base_speech_rate = 150  # Base rate before optimization
+        self.speech_rate = int(self.base_speech_rate * 0.9)  # 10% slower for clearer pronunciation
         self.volume = 0.8
         
         # Threading lock for cache operations
@@ -69,8 +73,14 @@ class AudioManager:
         try:
             # Initialize pygame mixer if not already done
             if not pygame.mixer.get_init():
-                pygame.mixer.pre_init(frequency=22050, size=-16, channels=2, buffer=512)
-                pygame.mixer.init()
+                # Check if pygame is already initialized to avoid double initialization
+                if not pygame.get_init():
+                    pygame.mixer.pre_init(frequency=22050, size=-16, channels=2, buffer=512)
+                    pygame.mixer.init()
+                else:
+                    # Pygame is already initialized, just ensure mixer is ready
+                    if not pygame.mixer.get_init():
+                        pygame.mixer.init()
                 
             self.mixer_initialized = True
             pygame.mixer.set_num_channels(8)  # Allow multiple sounds simultaneously
@@ -100,12 +110,45 @@ class AudioManager:
             
         except Exception as e:
             print(f"AudioManager: Failed to initialize audio system: {e}")
-            self.mixer_initialized = False
-            return False
+            return self._enter_degraded_mode(f"Initialization failure: {e}")
+            
+    def _enter_degraded_mode(self, reason: str) -> bool:
+        """Enter degraded mode with graceful fallback functionality."""
+        print(f"AudioManager: Entering degraded mode - {reason}")
+        self.degraded_mode = True
+        self.degradation_reason = reason
+        self.mixer_initialized = False
+        
+        # Disable audio but allow game to continue
+        self.enabled = False
+        
+        # Visual notification for user (could be enhanced with on-screen message)
+        print("AudioManager: Audio disabled - game will continue in silent mode")
+        
+        return True  # Return True to allow game to continue
+        
+    def _attempt_recovery(self) -> bool:
+        """Attempt to recover from degraded mode."""
+        if not self.degraded_mode:
+            return True
+            
+        print("AudioManager: Attempting audio system recovery...")
+        
+        try:
+            # Try to reinitialize
+            if self.initialize():
+                print("AudioManager: Successfully recovered from degraded mode")
+                self.degraded_mode = False
+                self.degradation_reason = ""
+                return True
+        except Exception as e:
+            print(f"AudioManager: Recovery attempt failed: {e}")
+            
+        return False
     
     def play_pronunciation(self, text: str, language: str = None, blocking: bool = False) -> bool:
         """
-        Play pronunciation of the given text.
+        Play pronunciation of the given text with robust error handling.
         
         Args:
             text (str): Text to pronounce
@@ -117,34 +160,39 @@ class AudioManager:
         """
         if not self.enabled or not self.mixer_initialized:
             return False
+        
+        try:
+            text = text.strip().lower()
+            language = language or self.language
+            cache_key = f"{text}_{language}"
             
-        text = text.strip().lower()
-        language = language or self.language
-        cache_key = f"{text}_{language}"
-        
-        # Check cache first
-        with self._cache_lock:
-            if cache_key in self.sound_cache:
-                try:
-                    sound = self.sound_cache[cache_key]
-                    sound.set_volume(self.volume)
-                    sound.play()
-                    self.cache_access_times[cache_key] = time.time()
-                    return True
-                except Exception as e:
-                    print(f"AudioManager: Failed to play cached sound: {e}")
-                    # Remove corrupted cache entry
-                    del self.sound_cache[cache_key]
-                    if cache_key in self.cache_access_times:
-                        del self.cache_access_times[cache_key]
-        
-        # Generate and play new audio
-        if blocking:
-            return self._generate_and_play_sync(text, language, cache_key)
-        else:
-            # Async generation for better performance
-            self.executor.submit(self._generate_and_play_async, text, language, cache_key)
-            return True
+            # Check cache first
+            with self._cache_lock:
+                if cache_key in self.sound_cache:
+                    try:
+                        sound = self.sound_cache[cache_key]
+                        sound.set_volume(self.volume)
+                        sound.play()
+                        self.cache_access_times[cache_key] = time.time()
+                        return True
+                    except Exception as e:
+                        print(f"AudioManager: Failed to play cached sound: {e}")
+                        # Remove corrupted cache entry
+                        del self.sound_cache[cache_key]
+                        if cache_key in self.cache_access_times:
+                            del self.cache_access_times[cache_key]
+            
+            # Generate and play new audio
+            if blocking:
+                return self._generate_and_play_sync(text, language, cache_key)
+            else:
+                # Async generation for better performance
+                self.executor.submit(self._generate_and_play_async, text, language, cache_key)
+                return True
+                
+        except Exception as e:
+            print(f"AudioManager: Critical error in play_pronunciation for '{text}': {e}")
+            return False
     
     def _generate_and_play_sync(self, text: str, language: str, cache_key: str) -> bool:
         """Synchronously generate and play audio."""
@@ -165,8 +213,12 @@ class AudioManager:
     def _generate_and_play_async(self, text: str, language: str, cache_key: str):
         """Asynchronously generate and play audio."""
         try:
+            # Check if shutdown was requested
+            if self._shutdown_requested:
+                return
+                
             sound = self._generate_audio(text, language)
-            if sound:
+            if sound and not self._shutdown_requested:
                 # Use pygame's threadsafe event system
                 pygame.event.post(pygame.event.Event(
                     pygame.USEREVENT + 1, 
@@ -188,32 +240,41 @@ class AudioManager:
     def _generate_offline_audio(self, text: str) -> Optional[pygame.mixer.Sound]:
         """Generate audio using pyttsx3 offline TTS."""
         try:
+            print(f"[DEBUG] Starting offline TTS generation for: '{text}'")
             temp_file = os.path.join(self.temp_dir, f"tts_{hash(text)}.wav")
             
             # Generate audio file
+            print(f"[DEBUG] Saving TTS to file: {temp_file}")
             self.tts_engine.save_to_file(text, temp_file)
+            print(f"[DEBUG] Calling runAndWait() - this may block")
             self.tts_engine.runAndWait()
+            print(f"[DEBUG] runAndWait() completed")
             
             if os.path.exists(temp_file):
+                print(f"[DEBUG] Loading sound from: {temp_file}")
                 sound = pygame.mixer.Sound(temp_file)
                 # Clean up temp file after loading
                 try:
                     os.remove(temp_file)
+                    print(f"[DEBUG] Cleaned up temp file: {temp_file}")
                 except:
                     pass  # Ignore cleanup errors
+                print(f"[DEBUG] TTS generation completed successfully for: '{text}'")
                 return sound
+            else:
+                print(f"[DEBUG] TTS file was not created: {temp_file}")
                 
         except Exception as e:
-            print(f"AudioManager: Offline TTS failed for '{text}': {e}")
+            print(f"[DEBUG] Offline TTS failed for '{text}': {e}")
         return None
     
     def _generate_online_audio(self, text: str, language: str) -> Optional[pygame.mixer.Sound]:
-        """Generate audio using gTTS online service."""
+        """Generate audio using gTTS online service with slower speech for clarity."""
         try:
             temp_file = os.path.join(self.temp_dir, f"gtts_{hash(text)}_{language}.mp3")
             
-            # Generate audio using gTTS
-            tts = gTTS(text=text, lang=language, slow=False)
+            # Generate audio using gTTS with slow=True for 10% slower speech
+            tts = gTTS(text=text, lang=language, slow=True)
             tts.save(temp_file)
             
             if os.path.exists(temp_file):
@@ -254,52 +315,83 @@ class AudioManager:
     
     def preload_sounds(self, texts: List[str], language: str = None) -> int:
         """
-        Preload multiple sounds into cache.
+        Preload multiple sounds into cache asynchronously.
         
         Args:
             texts (List[str]): List of texts to preload
             language (str): Language code
             
         Returns:
-            int: Number of sounds successfully preloaded
+            int: Number of sounds submitted for preloading (not necessarily completed)
         """
         if not self.enabled or not self.mixer_initialized:
             return 0
             
         language = language or self.language
-        loaded_count = 0
+        submitted_count = 0
         
+        # Submit all preload tasks asynchronously to avoid blocking
         for text in texts:
             text = text.strip().lower()
             cache_key = f"{text}_{language}"
             
             if cache_key not in self.sound_cache:
                 try:
-                    sound = self._generate_audio(text, language)
-                    if sound:
-                        with self._cache_lock:
-                            self._add_to_cache(cache_key, sound)
-                        loaded_count += 1
+                    # Submit async task instead of blocking
+                    self.executor.submit(self._preload_single_sound, text, language, cache_key)
+                    submitted_count += 1
                 except Exception as e:
-                    print(f"AudioManager: Failed to preload '{text}': {e}")
+                    print(f"AudioManager: Failed to submit preload task for '{text}': {e}")
         
-        print(f"AudioManager: Preloaded {loaded_count}/{len(texts)} sounds")
-        return loaded_count
+        print(f"AudioManager: Submitted {submitted_count}/{len(texts)} sounds for preloading")
+        return submitted_count
+    
+    def _preload_single_sound(self, text: str, language: str, cache_key: str):
+        """
+        Preload a single sound asynchronously.
+        
+        Args:
+            text (str): Text to preload
+            language (str): Language code
+            cache_key (str): Cache key for the sound
+        """
+        try:
+            sound = self._generate_audio(text, language)
+            if sound:
+                # Use pygame's threadsafe event system to add to cache
+                pygame.event.post(pygame.event.Event(
+                    pygame.USEREVENT + 1, 
+                    {"action": "cache_audio", "sound": sound, "cache_key": cache_key}
+                ))
+        except Exception as e:
+            print(f"AudioManager: Failed to preload '{text}': {e}")
     
     def handle_audio_event(self, event):
-        """Handle audio-related pygame events (for async playback)."""
-        if hasattr(event, 'action') and event.action == "play_audio":
-            try:
-                sound = event.sound
-                cache_key = event.cache_key
-                sound.set_volume(self.volume)
-                sound.play()
-                
-                # Cache the sound
-                with self._cache_lock:
-                    self._add_to_cache(cache_key, sound)
-            except Exception as e:
-                print(f"AudioManager: Failed to handle audio event: {e}")
+        """Handle audio-related pygame events (for async playback and caching)."""
+        if hasattr(event, 'action'):
+            if event.action == "play_audio":
+                try:
+                    sound = event.sound
+                    cache_key = event.cache_key
+                    sound.set_volume(self.volume)
+                    sound.play()
+                    
+                    # Cache the sound
+                    with self._cache_lock:
+                        self._add_to_cache(cache_key, sound)
+                except Exception as e:
+                    print(f"AudioManager: Failed to play async audio: {e}")
+            
+            elif event.action == "cache_audio":
+                try:
+                    sound = event.sound
+                    cache_key = event.cache_key
+                    
+                    # Add to cache
+                    with self._cache_lock:
+                        self._add_to_cache(cache_key, sound)
+                except Exception as e:
+                    print(f"AudioManager: Failed to cache preloaded audio: {e}")
     
     def clear_cache(self):
         """Clear all cached sounds."""
@@ -308,25 +400,38 @@ class AudioManager:
             self.cache_access_times.clear()
     
     def cleanup(self):
-        """Clean up resources."""
-        self.clear_cache()
-        
-        # Shutdown TTS engine
-        if self.tts_engine:
-            try:
-                self.tts_engine.stop()
-            except:
-                pass
-        
-        # Shutdown thread pool
-        self.executor.shutdown(wait=True)
-        
-        # Clean up temp directory
+        """Clean up resources with proper error handling."""
         try:
-            import shutil
-            shutil.rmtree(self.temp_dir, ignore_errors=True)
-        except:
-            pass
+            print("AudioManager: Starting cleanup...")
+            self._shutdown_requested = True
+            self.clear_cache()
+            
+            # Shutdown TTS engine
+            if self.tts_engine:
+                try:
+                    self.tts_engine.stop()
+                except Exception as e:
+                    print(f"AudioManager: Error stopping TTS engine: {e}")
+                finally:
+                    self.tts_engine = None
+            
+            # Shutdown thread pool gracefully
+            try:
+                self._shutdown_requested = True
+                self.executor.shutdown(wait=False, cancel_futures=True)
+            except Exception as e:
+                print(f"AudioManager: Error shutting down thread pool: {e}")
+            
+            # Clean up temp directory
+            try:
+                import shutil
+                shutil.rmtree(self.temp_dir, ignore_errors=True)
+            except Exception as e:
+                print(f"AudioManager: Error cleaning temp directory: {e}")
+                
+            print("AudioManager: Cleanup completed")
+        except Exception as e:
+            print(f"AudioManager: Critical error during cleanup: {e}")
     
     def set_enabled(self, enabled: bool):
         """Enable or disable audio."""
@@ -343,6 +448,23 @@ class AudioManager:
             print(f"AudioManager: TTS method set to {method}")
         else:
             print(f"AudioManager: Invalid TTS method '{method}'")
+            
+    def set_speech_rate(self, rate: int):
+        """Set speech rate and update TTS engine settings."""
+        self.base_speech_rate = rate
+        self.speech_rate = int(rate * 0.9)  # Apply 10% reduction
+        
+        # Update pyttsx3 engine if available
+        if self.tts_engine:
+            try:
+                self.tts_engine.setProperty('rate', self.speech_rate)
+                print(f"AudioManager: Updated speech rate to {self.speech_rate} (10% slower than {rate})")
+            except Exception as e:
+                print(f"AudioManager: Failed to update speech rate: {e}")
+                
+    def get_speech_rate(self) -> int:
+        """Get current optimized speech rate."""
+        return self.speech_rate
     
     def get_stats(self) -> Dict:
         """Get audio manager statistics."""
@@ -353,6 +475,8 @@ class AudioManager:
             "cached_sounds": len(self.sound_cache),
             "cache_limit": self.cache_limit,
             "volume": self.volume,
+            "base_speech_rate": self.base_speech_rate,
+            "optimized_speech_rate": self.speech_rate,
             "pyttsx3_available": PYTTSX3_AVAILABLE,
             "gtts_available": GTTS_AVAILABLE
         }

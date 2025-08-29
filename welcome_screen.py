@@ -10,6 +10,7 @@ from Display_settings import (
 
 def level_menu(WIDTH, HEIGHT, screen, small_font):
     """Display the Level Options screen to choose the mission using a cyberpunk neon display."""
+    print("Level menu started - waiting for mission selection...")
     running = True
     clock = pygame.time.Clock()
     
@@ -27,6 +28,13 @@ def level_menu(WIDTH, HEIGHT, screen, small_font):
     shapes_rect = pygame.Rect((WIDTH // 2 - button_width - 20, HEIGHT // 2 + 10), (button_width, button_height))
     clcase_rect = pygame.Rect((WIDTH // 2 + 20, HEIGHT // 2 + 10), (button_width, button_height))
     colors_rect = pygame.Rect((WIDTH // 2 - 150, HEIGHT // 2 + 120), (300, 80))  # Add a new Colors button
+    
+    print(f"Level menu button rectangles created for screen size {WIDTH}x{HEIGHT}:")
+    print(f"  ABC (alphabet): {abc_rect}")
+    print(f"  123 (numbers): {num_rect}")
+    print(f"  Shapes: {shapes_rect}")
+    print(f"  C/L Case: {clcase_rect}")
+    print(f"  Colors: {colors_rect}")
 
     # Set up smooth color transition variables for the title
     color_transition = 0.0
@@ -76,19 +84,33 @@ def level_menu(WIDTH, HEIGHT, screen, small_font):
             if event.type == pygame.QUIT:
                 pygame.quit(); exit()
             if event.type == pygame.KEYDOWN and event.key == pygame.K_ESCAPE:
-                pygame.quit(); exit()
+                print("ESC key pressed - returning to main menu")
+                return None
             if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
                 mx, my = pygame.mouse.get_pos()
+                print(f"Mouse clicked at ({mx}, {my})")
                 if abc_rect.collidepoint(mx, my):
+                    print("ABC button clicked - returning 'alphabet'")
                     return "alphabet"
                 elif num_rect.collidepoint(mx, my):
+                    print("123 button clicked - returning 'numbers'")
                     return "numbers"
                 elif shapes_rect.collidepoint(mx, my):
+                    print("Shapes button clicked - returning 'shapes'")
                     return "shapes"
                 elif clcase_rect.collidepoint(mx, my):
+                    print("C/L Case button clicked - returning 'clcase'")
                     return "clcase"
                 elif colors_rect.collidepoint(mx, my):  # Handle Colors button click
+                    print("Colors button clicked - returning 'colors'")
                     return "colors"
+                else:
+                    print(f"Click missed all buttons. Button rects:")
+                    print(f"  ABC: {abc_rect}")
+                    print(f"  123: {num_rect}")
+                    print(f"  Shapes: {shapes_rect}")
+                    print(f"  C/L Case: {clcase_rect}")
+                    print(f"  Colors: {colors_rect}")
 
         # Draw the outward moving particles (optimized)
         for particle in repel_particles:

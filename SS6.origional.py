@@ -20,6 +20,7 @@ from levels import ColorsLevel, ShapesLevel, AlphabetLevel, NumbersLevel, CLCase
 pygame.init()
 
 # Allow only the necessary events (including multi-touch)
+# cSpell:ignore FINGERDOWN FINGERUP FINGERMOTION MOUSEBUTTONDOWN MOUSEBUTTONUP
 pygame.event.set_allowed([
     pygame.FINGERDOWN,
     pygame.FINGERUP,
@@ -96,6 +97,12 @@ def init_resources():
     # Initialize glass shatter manager
     glass_shatter_manager = GlassShatterManager(WIDTH, HEIGHT, particle_manager)
     
+    # CRITICAL: Ensure shake attributes are properly initialized
+    if not hasattr(glass_shatter_manager, 'shake_duration'):
+        glass_shatter_manager.shake_duration = 0
+    if not hasattr(glass_shatter_manager, 'shake_magnitude'):
+        glass_shatter_manager.shake_magnitude = 0
+    
     # Initialize multi-touch manager
     multi_touch_manager = MultiTouchManager(WIDTH, HEIGHT)
     
@@ -158,6 +165,10 @@ swirl_particles = []
 particles_converging = False
 convergence_target = None
 convergence_timer = 0
+
+# Add missing global variables for screen shake
+shake_duration = 0
+shake_magnitude = 0
 
 ###############################################################################
 #                              SCREEN FUNCTIONS                               #
@@ -309,6 +320,7 @@ def game_loop(mode):
     player_x = WIDTH // 2
     player_y = HEIGHT // 2
     player_color_index = 0
+    # cSpell:ignore cooldown
     click_cooldown = 0
     mouse_down = False
     mouse_press_time = 0
@@ -323,8 +335,9 @@ def game_loop(mode):
         colors_level = ColorsLevel(
             WIDTH, HEIGHT, screen, small_font, particle_manager,
             glass_shatter_manager, multi_touch_manager, hud_manager,
-            mother_radius, create_explosion, checkpoint_manager.show_checkpoint_screen, game_over_screen,
-            explosions, draw_explosion
+            mother_radius, create_explosion, 
+            checkpoint_manager.show_checkpoint_screen if checkpoint_manager else None, 
+            game_over_screen, explosions, draw_explosion
         )
         return colors_level.run()
     
@@ -367,8 +380,10 @@ def game_loop(mode):
         return numbers_level.run()
 
     # --- C/L CASE LEVEL SPECIAL LOGIC ---
+    # cSpell:ignore clcase
     if mode == "clcase":
         # Create and run the C/L case level
+        # cSpell:ignore clcase
         clcase_level = CLCaseLevel(
             WIDTH, HEIGHT, screen, fonts, small_font, TARGET_FONT,
             particle_manager, glass_shatter_manager, multi_touch_manager,
@@ -390,7 +405,8 @@ def create_aoe(x, y, letters, target_letter):
     """Handles Area of Effect ability (placeholder/unused currently)."""
     # This function seems unused based on the event loop logic.
     # If intended, it would need integration into the event handling.
-    global letters_destroyed # Needs access to modify this counter
+    # NOTE: letters_destroyed should be passed as parameter or managed by caller
+    letters_destroyed = 0  # Local variable to track destroyed count in this function
     create_explosion(x, y, max_radius=350, duration=40) # Bigger AOE explosion
     destroyed_count_in_aoe = 0
     for letter_obj in letters[:]:
@@ -403,7 +419,8 @@ def create_aoe(x, y, letters, target_letter):
                 letters.remove(letter_obj)
                 destroyed_count_in_aoe += 1
 
-    letters_destroyed += destroyed_count_in_aoe # Update the counter for the current group
+    # Return the destroyed count instead of trying to modify undefined global
+    return destroyed_count_in_aoe  # Return the count for caller to handle
 
 
 
@@ -445,6 +462,7 @@ def well_done_screen(score):
         next_player_color = random.choice(FLAME_COLORS) if flash else BLACK
         next_player_text = small_font.render("Click for Next Mission", True, next_player_color)
         next_player_rect = next_player_text.get_rect(center=(WIDTH // 2, HEIGHT // 2 + 70))
+        # cSpell:ignore blit
         screen.blit(next_player_text, next_player_rect)
 
         pygame.display.flip()
@@ -496,6 +514,7 @@ def start_charge_up_effect(player_x, player_y, target_x, target_y):
     charge_particles = []
     
     # PERFORMANCE: Reduce particle count for QBoard
+    # cSpell:ignore QBOARD
     particle_count = 75 if DISPLAY_MODE == "QBOARD" else 150
     
     for _ in range(particle_count):
@@ -530,15 +549,20 @@ def start_charge_up_effect(player_x, player_y, target_x, target_y):
 # Legacy functions - now handled by CenterPieceManager
 def get_particle_from_pool():
     """Legacy function that now uses the particle manager."""
-    return particle_manager.get_particle()
+    if particle_manager:
+        return particle_manager.get_particle()
+    return None
 
 def release_particle(particle):
     """Legacy function that now uses the particle manager."""
-    particle_manager.release_particle(particle)
+    if particle_manager:
+        particle_manager.release_particle(particle)
 
 def create_particle(x, y, color, size, dx, dy, duration):
     """Legacy function that now uses the particle manager."""
-    return particle_manager.create_particle(x, y, color, size, dx, dy, duration)
+    if particle_manager:
+        return particle_manager.create_particle(x, y, color, size, dx, dy, duration)
+    return None
 
 def create_explosion(x, y, color=None, max_radius=270, duration=30):
     """Adds an explosion effect to the list, with a limit for performance."""
@@ -580,6 +604,7 @@ def draw_explosion(explosion, offset_x=0, offset_y=0):
     draw_y = int(explosion["y"] + offset_y)
 
     # Draw using SRCALPHA surface for transparency
+    # cSpell:ignore SRCALPHA
     if radius > 0:
         explosion_surf = pygame.Surface((radius*2, radius*2), pygame.SRCALPHA)
         pygame.draw.circle(explosion_surf, color, (radius, radius), radius)

@@ -147,6 +147,10 @@ class GlassShatterManager:
             height (int): Screen height
             particle_manager: Reference to particle manager for shatter effects
         """
+        # CRITICAL: Initialize shake attributes FIRST to prevent any attribute errors
+        self.shake_duration = 0
+        self.shake_magnitude = 0
+        
         self.width = width
         self.height = height
         self.particle_manager = particle_manager
@@ -180,6 +184,8 @@ class GlassShatterManager:
         self._last_crack_time = 0
         self.current_background = WHITE
         self.opposite_background = BLACK
+        self.shake_duration = 0
+        self.shake_magnitude = 0
         
     def handle_misclick(self, x, y):
         """
@@ -313,9 +319,19 @@ class GlassShatterManager:
         Update the glass shatter state each frame.
         Call this in the main game loop.
         """
-        # Update screen shake
-        if self.shake_duration > 0:
-            self.shake_duration -= 1
+        # SUPER DEFENSIVE: Update screen shake with maximum safety
+        try:
+            if hasattr(self, 'shake_duration') and getattr(self, 'shake_duration', 0) > 0:
+                self.shake_duration -= 1
+            elif not hasattr(self, 'shake_duration'):
+                # Initialize missing attributes
+                self.shake_duration = 0
+                self.shake_magnitude = 0
+        except (AttributeError, TypeError) as e:
+            # Handle any attribute access issues
+            print(f"[DEBUG] Shake attribute initialization in update(): {e}")
+            self.shake_duration = 0
+            self.shake_magnitude = 0
             
         # Update shatter timer
         if self.background_shattered:
@@ -352,6 +368,16 @@ class GlassShatterManager:
         Returns:
             tuple: (offset_x, offset_y) - always (0, 0) since shake is disabled
         """
+        # SUPER DEFENSIVE: Always ensure shake attributes exist, even if __init__ failed
+        try:
+            if not hasattr(self, 'shake_duration'):
+                self.shake_duration = 0
+            if not hasattr(self, 'shake_magnitude'):
+                self.shake_magnitude = 0
+        except Exception:
+            # In case even hasattr fails for some reason
+            pass
+        
         return 0, 0
         
     def get_background_color(self):
