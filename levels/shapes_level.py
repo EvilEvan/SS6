@@ -7,6 +7,7 @@ from settings import (
 )
 from Display_settings import PERFORMANCE_SETTINGS
 from universal_class import GlassShatterManager, HUDManager, MultiTouchManager, CheckpointManager, FlamethrowerManager
+from utils.level_resource_manager import LevelResourceManager
 
 
 class ShapesLevel:
@@ -73,6 +74,19 @@ class ShapesLevel:
         self.groups = [self.sequence[i:i+GROUP_SIZE] for i in range(0, len(self.sequence), GROUP_SIZE)]
         self.TOTAL_LETTERS = len(self.sequence)
         
+        # Initialize level resource manager for isolation and audio
+        self.level_resources = LevelResourceManager(
+            level_id="shapes",
+            width=width,
+            height=height,
+            max_effects={
+                "explosions": 25,
+                "particles": 150,
+                "lasers": 15,
+                "sounds": 10  # For shape name pronunciations
+            }
+        )
+        
         # Game state variables
         self.reset_level_state()
         
@@ -126,24 +140,44 @@ class ShapesLevel:
         Returns:
             bool: False to return to menu, True to restart level
         """
-        self.reset_level_state()
-        
-        # Reset global effects that could persist between levels
-        self.multi_touch_manager.reset()
-        self.glass_shatter_manager.reset()
-        self.flamethrower_manager.clear()
-        self.center_piece_manager.reset()
-        
-        # Initialize background stars
-        stars = []
-        for _ in range(100):
-            x = random.randint(0, self.width)
-            y = random.randint(0, self.height)
-            radius = random.randint(2, 4)
-            stars.append([x, y, radius])
-        
-        # Run main game loop
-        return self._main_game_loop(stars)
+        try:
+            # Initialize level resources
+            if not self.level_resources.initialize():
+                print("Failed to initialize shapes level resources")
+                return False
+            
+            # Preload shape name sounds
+            shape_names = [shape.lower() for shape in SEQUENCES["shapes"]]
+            self.level_resources.preload_level_sounds(shape_names)
+            
+            self.reset_level_state()
+            
+            # Reset global effects that could persist between levels
+            self.multi_touch_manager.reset()
+            self.glass_shatter_manager.reset()
+            self.flamethrower_manager.clear()
+            self.center_piece_manager.reset()
+            
+            # Initialize background stars
+            stars = []
+            for _ in range(100):
+                x = random.randint(0, self.width)
+                y = random.randint(0, self.height)
+                radius = random.randint(2, 4)
+                stars.append([x, y, radius])
+            
+            # Run main game loop
+            return self._main_game_loop(stars)
+            
+        except Exception as e:
+            print(f"ShapesLevel: Critical error during level execution: {e}")
+            return False
+        finally:
+            # CRITICAL: Ensure cleanup even if exception occurs
+            try:
+                self.level_resources.cleanup()
+            except Exception as cleanup_error:
+                print(f"ShapesLevel: Error during cleanup: {cleanup_error}")
         
     def _main_game_loop(self, stars):
         """Main game loop for the shapes level."""
@@ -234,6 +268,11 @@ class ShapesLevel:
                 hit_target = True
                 if letter_obj["value"] == self.target_letter:
                     self.score += 10
+                    
+                    # EDUCATIONAL FEATURE: Play pronunciation of the shape name
+                    shape_name = letter_obj["value"].lower()  # Convert "Circle" to "circle"
+                    self.level_resources.play_target_sound(shape_name)
+                    
                     # Common destruction effects
                     self.create_explosion(letter_obj["x"], letter_obj["y"])
                     self.flamethrower_manager.create_flamethrower(self.player_x, self.player_y - 80, letter_obj["x"], letter_obj["y"])

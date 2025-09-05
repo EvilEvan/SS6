@@ -93,8 +93,48 @@ class AlphabetLevel:
             }
         )
         
-        # Game state variables
-        self.reset_level_state()
+    def _get_phonics_sound(self, letter: str) -> str:
+        """
+        Get the phonics sound for a given letter.
+        
+        Args:
+            letter (str): The letter (A-Z)
+            
+        Returns:
+            str: The phonics sound representation
+        """
+        # Phonics mapping for letters A-Z
+        phonics_map = {
+            'A': 'ah',          # Short 'a' sound as in 'apple'
+            'B': 'buh',         # 'b' sound as in 'ball'
+            'C': 'kuh',         # Hard 'c' sound as in 'cat'
+            'D': 'duh',         # 'd' sound as in 'dog'
+            'E': 'eh',          # Short 'e' sound as in 'egg'
+            'F': 'fuh',         # 'f' sound as in 'fish'
+            'G': 'guh',         # Hard 'g' sound as in 'go'
+            'H': 'huh',         # 'h' sound as in 'hat'
+            'I': 'ih',          # Short 'i' sound as in 'igloo'
+            'J': 'juh',         # 'j' sound as in 'jump'
+            'K': 'kuh',         # 'k' sound as in 'kite'
+            'L': 'luh',         # 'l' sound as in 'lion'
+            'M': 'muh',         # 'm' sound as in 'moon'
+            'N': 'nuh',         # 'n' sound as in 'net'
+            'O': 'oh',          # Short 'o' sound as in 'octopus'
+            'P': 'puh',         # 'p' sound as in 'pig'
+            'Q': 'kwuh',        # 'qu' sound as in 'queen'
+            'R': 'ruh',         # 'r' sound as in 'run'
+            'S': 'sss',         # 's' sound as in 'snake'
+            'T': 'tuh',         # 't' sound as in 'top'
+            'U': 'uh',          # Short 'u' sound as in 'umbrella'
+            'V': 'vuh',         # 'v' sound as in 'van'
+            'W': 'wuh',         # 'w' sound as in 'water'
+            'X': 'ks',          # 'x' sound as in 'box'
+            'Y': 'yuh',         # 'y' sound as in 'yes'
+            'Z': 'zzz'          # 'z' sound as in 'zebra'
+        }
+        
+        return phonics_map.get(letter.upper(), None)
+    
         
     def reset_level_state(self):
         """Reset all level-specific state variables."""
@@ -303,8 +343,23 @@ class AlphabetLevel:
                             if letter_obj["value"] == self.target_letter:
                                 self.score += 10
                                 
-                                # EDUCATIONAL FEATURE: Play pronunciation of the letter
-                                self.level_resources.play_target_sound(letter_obj["value"])
+                                # EDUCATIONAL FEATURE: Play pronunciation and phonics of the letter
+                                letter_value = letter_obj["value"]
+                                
+                                # First play the letter name (A, B, C, etc.)
+                                self.level_resources.play_target_sound(letter_value)
+                                
+                                # Then play the phonics sound (phonetic sound like "ah", "buh", "kuh")
+                                phonics_sound = self._get_phonics_sound(letter_value)
+                                if phonics_sound:
+                                    # Delay phonics sound slightly so it plays after letter name
+                                    import threading
+                                    def play_delayed_phonics():
+                                        import time
+                                        time.sleep(0.8)  # 800ms delay
+                                        self.level_resources.play_target_sound(phonics_sound)
+                                    
+                                    threading.Thread(target=play_delayed_phonics, daemon=True).start()
                                 
                                 # Common destruction effects
                                 self.level_resources.create_explosion(letter_obj["x"], letter_obj["y"])

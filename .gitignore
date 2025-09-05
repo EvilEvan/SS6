@@ -150,4 +150,12 @@ ehthumbs.db
 Thumbs.db
 
 # Snapshots directory (contains AI interaction snapshots)
-.snapshots/ 
+.snapshots/
+
+# Audio temporary files
+audio_temp_*
+
+# Performance test files (development/testing only)
+performance_test_*.py
+simple_*_perf_test.py
+test_optimizations.py 
