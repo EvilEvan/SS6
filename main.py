@@ -117,13 +117,26 @@ class SuperStudentGame:
         
     def initialize_pygame(self) -> bool:
         """
-        Initialize pygame with comprehensive error handling.
+        Initialize pygame with comprehensive error handling for headless environments.
         
         Returns:
             bool: True if initialization successful, False otherwise
         """
         try:
-            pygame.init()
+            # Check for headless environment before initializing audio
+            headless_mode = self._detect_headless_environment()
+            if headless_mode:
+                print("Headless environment detected - initializing in silent mode")
+                os.environ['SDL_AUDIODRIVER'] = 'dummy'
+            
+            # Initialize pygame with environment-appropriate settings
+            if headless_mode:
+                # Initialize without audio for headless environments
+                pygame.display.init()
+                pygame.font.init()
+                # Skip mixer initialization in headless mode
+            else:
+                pygame.init()
             
             # Configure allowed events for performance
             pygame.event.set_allowed([
@@ -133,23 +146,55 @@ class SuperStudentGame:
             ])
             
             # Get display info and setup screen
-            info = pygame.display.Info()
-            self.width, self.height = info.current_w, info.current_h
+            try:
+                info = pygame.display.Info()
+                self.width, self.height = info.current_w, info.current_h
+            except:
+                # Fallback for headless environments
+                self.width, self.height = 800, 600
             
-            self.screen = pygame.display.set_mode(
-                (self.width, self.height), 
-                pygame.FULLSCREEN
-            )
-            pygame.display.set_caption("Super Student 6 - Enhanced")
+            # Try to create display surface (may fail in headless)
+            try:
+                self.screen = pygame.display.set_mode(
+                    (self.width, self.height), 
+                    pygame.FULLSCREEN if not headless_mode else 0
+                )
+                pygame.display.set_caption("Super Student 6 - Enhanced")
+            except pygame.error:
+                # Fallback for headless - create a surface
+                self.screen = pygame.Surface((self.width, self.height))
+                print("Display unavailable - using virtual surface")
             
             self.clock = pygame.time.Clock()
             
             print(f"Pygame initialized successfully - Resolution: {self.width}x{self.height}")
+            print(f"Audio mode: {'Silent' if headless_mode else 'Enabled'}")
             return True
             
         except Exception as e:
             print(f"Failed to initialize pygame: {e}")
             return False
+    
+    def _detect_headless_environment(self) -> bool:
+        """Detect if we're running in a headless environment."""
+        # Check for explicit audio driver setting
+        if os.environ.get('SDL_AUDIODRIVER') == 'dummy':
+            return True
+            
+        # Check for display availability on Unix-like systems
+        if os.name != 'nt' and not os.environ.get('DISPLAY'):
+            return True
+            
+        # Check for common CI/headless environment indicators
+        headless_indicators = ['CI', 'TRAVIS', 'GITHUB_ACTIONS', 'JENKINS', 'BUILDBOT']
+        if any(os.environ.get(indicator) for indicator in headless_indicators):
+            return True
+            
+        # Check for specific user variables that indicate testing
+        if os.environ.get('PYTEST_CURRENT_TEST') or os.environ.get('TESTING'):
+            return True
+            
+        return False
     
     def initialize_resources(self) -> bool:
         """
@@ -210,42 +255,90 @@ class SuperStudentGame:
             return False
     
     def cleanup_resources(self):
-        """Thoroughly clean up all resources to prevent memory leaks."""
+        """Thoroughly clean up all resources to prevent memory leaks with enhanced cleanup."""
         try:
             print("Cleaning up game resources...")
+            
+            # Enhanced cleanup with memory pressure monitoring
+            import psutil
+            process = psutil.Process()
+            memory_before = process.memory_info().rss / 1024 / 1024  # MB
             
             # Cleanup audio systems
             if hasattr(self, 'audio_manager') and self.audio_manager:
                 self.audio_manager.cleanup()
+                del self.audio_manager
                 
             if hasattr(self, 'sound_effects_manager') and self.sound_effects_manager:
                 self.sound_effects_manager.cleanup()
+                del self.sound_effects_manager
             
-            # Cleanup particle systems
+            # Cleanup particle systems with enhanced clearing
             if hasattr(self, 'particle_manager') and self.particle_manager:
                 if hasattr(self.particle_manager, 'cleanup'):
                     self.particle_manager.cleanup()
                 else:
-                    # Fallback for older particle manager
+                    # Enhanced fallback cleanup
                     self.particle_manager.particles.clear()
                     for particle in self.particle_manager.particle_pool:
                         particle["active"] = False
+                        # Clear particle data
+                        particle.update({"x": 0, "y": 0, "dx": 0, "dy": 0, "duration": 0})
+                del self.particle_manager
             
-            # Cleanup managers
+            # Enhanced manager cleanup
             for manager_name, manager in self.managers.items():
                 if hasattr(manager, 'cleanup'):
                     manager.cleanup()
+                # Force deletion of manager references
+                del manager
+            self.managers.clear()
             
-            # Force garbage collection
+            # Clear resource manager caches
+            if hasattr(self, 'resource_manager') and self.resource_manager:
+                if hasattr(self.resource_manager, 'font_cache'):
+                    self.resource_manager.font_cache.clear()
+                del self.resource_manager
+            
+            # Aggressive garbage collection
             gc.collect()
+            gc.collect()  # Call twice for circular references
             
             # Clean up lock file
             self.cleanup_lock_file()
             
-            print("Resource cleanup completed")
+            # Memory usage reporting
+            memory_after = process.memory_info().rss / 1024 / 1024  # MB
+            memory_freed = memory_before - memory_after
+            print(f"Resource cleanup completed - Memory freed: {memory_freed:.2f}MB")
             
         except Exception as e:
             print(f"Error during resource cleanup: {e}")
+    
+    def _check_memory_pressure(self) -> bool:
+        """Check if system is under memory pressure and trigger cleanup if needed."""
+        try:
+            import psutil
+            memory = psutil.virtual_memory()
+            
+            # If available memory is less than 20% or we're using > 200MB
+            if memory.percent > 80:
+                print(f"Memory pressure detected: {memory.percent}% used")
+                gc.collect()  # Force garbage collection
+                return True
+                
+            process = psutil.Process()
+            process_memory = process.memory_info().rss / 1024 / 1024  # MB
+            
+            if process_memory > 200:  # More than 200MB
+                print(f"High process memory usage: {process_memory:.1f}MB")
+                gc.collect()
+                return True
+                
+            return False
+            
+        except Exception:
+            return False  # If we can't check, assume no pressure
     
     def handle_error(self, error: Exception, context: str = "Unknown"):
         """
@@ -319,6 +412,11 @@ class SuperStudentGame:
             
             # Cleanup level resources
             level_resource_manager.cleanup()
+            
+            # Check for memory pressure after level completion
+            if self._check_memory_pressure():
+                print("Performing additional cleanup due to memory pressure")
+                gc.collect()
             
             print(f"Level {level_mode} completed successfully")
             return result

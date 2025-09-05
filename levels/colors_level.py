@@ -160,25 +160,67 @@ class ColorsLevel:
         
         return shimmer, max(200, min(255, int(alpha_shimmer)))
 
-    # NEW helper -----------------------------------------------------------
+    # Enhanced surface caching with preloading and smart eviction
     def _get_circle_surface(self, color, radius):
-        """Return cached filled-circle surface for given color & radius with memory management."""
+        """Return cached filled-circle surface for given color & radius with enhanced memory management."""
         key = (color, radius)
         surf = self.surface_cache.get(key)
+        
         if surf is None:
             # Check cache size limit and clean up if necessary
             if len(self.surface_cache) >= self.surface_cache_limit:
-                # Remove oldest 25% of cache entries
-                items_to_remove = len(self.surface_cache) // 4
-                keys_to_remove = list(self.surface_cache.keys())[:items_to_remove]
+                # Smart eviction: remove least recently used items
+                if hasattr(self, '_surface_access_times'):
+                    # Sort by access time and remove oldest 25%
+                    items_to_remove = len(self.surface_cache) // 4
+                    sorted_keys = sorted(self._surface_access_times.keys(), 
+                                       key=lambda k: self._surface_access_times[k])
+                    keys_to_remove = sorted_keys[:items_to_remove]
+                else:
+                    # Fallback to simple removal if access times not tracked
+                    items_to_remove = len(self.surface_cache) // 4
+                    keys_to_remove = list(self.surface_cache.keys())[:items_to_remove]
+                
                 for old_key in keys_to_remove:
-                    del self.surface_cache[old_key]
+                    self.surface_cache.pop(old_key, None)
+                    if hasattr(self, '_surface_access_times'):
+                        self._surface_access_times.pop(old_key, None)
             
-            # Create new surface
+            # Create new surface with optimized settings
             surf = pygame.Surface((radius * 2, radius * 2), pygame.SRCALPHA)
             pygame.draw.circle(surf, color, (radius, radius), radius)
             self.surface_cache[key] = surf
+            
+            # Track access time for smart eviction
+            if not hasattr(self, '_surface_access_times'):
+                self._surface_access_times = {}
+            self._surface_access_times[key] = self.frame_counter
+        else:
+            # Update access time for LRU tracking
+            if hasattr(self, '_surface_access_times'):
+                self._surface_access_times[key] = self.frame_counter
+                
         return surf
+    
+    def _preload_common_surfaces(self):
+        """Preload commonly used surfaces during level initialization."""
+        # Preload surfaces for common dot sizes and colors
+        common_radii = [15, 20, 25, 30]  # Common dot sizes
+        
+        for color in self.COLORS_LIST:
+            for radius in common_radii:
+                # Pre-create surface to warm the cache
+                self._get_circle_surface(color, radius)
+                
+        # Also preload some gradient variations
+        for color in self.COLORS_LIST:
+            # Lighter version (for center shading)
+            lighter_color = tuple(min(255, int(c * 1.3)) for c in color)
+            darker_color = tuple(max(0, int(c * 0.7)) for c in color)
+            
+            for radius in [20, 25]:  # Most common sizes
+                self._get_circle_surface(lighter_color, radius)
+                self._get_circle_surface(darker_color, radius)
         
     def run(self):
         """
@@ -195,6 +237,9 @@ class ColorsLevel:
             
             # Preload color name sounds
             self.level_resources.preload_level_sounds([name.lower() for name in self.color_names])
+            
+            # Preload common surfaces for better performance
+            self._preload_common_surfaces()
             
             self.reset_level_state()
             
