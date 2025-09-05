@@ -96,23 +96,34 @@ class MainStabilityTestSuite:
             return False
     
     def test_pygame_initialization(self) -> bool:
-        """Test pygame initialization without opening a window."""
+        """Test pygame initialization using SuperStudentGame's improved method."""
         try:
-            # Initialize pygame in headless mode for testing
+            # Set headless environment variables for testing
             os.environ['SDL_VIDEODRIVER'] = 'dummy'
+            os.environ['SDL_AUDIODRIVER'] = 'dummy'
             
             from main import SuperStudentGame
             game = SuperStudentGame()
             
-            # Mock screen size for testing
-            game.width, game.height = 800, 600
+            # Test the improved initialization method
+            success = game.initialize_pygame()
             
-            # Test initialization components
-            pygame.init()
-            pygame.mixer.init()
+            if not success:
+                print("Pygame initialization returned False")
+                return False
             
-            # Verify basic pygame functionality
-            clock = pygame.time.Clock()
+            # Verify basic attributes are set
+            if game.width <= 0 or game.height <= 0:
+                print(f"Invalid screen dimensions: {game.width}x{game.height}")
+                return False
+                
+            if not game.screen:
+                print("Screen surface not created")
+                return False
+                
+            if not game.clock:
+                print("Clock not created")
+                return False
             
             return True
             
@@ -124,38 +135,45 @@ class MainStabilityTestSuite:
                 del os.environ['SDL_VIDEODRIVER']
     
     def test_resource_initialization(self) -> bool:
-        """Test resource manager initialization."""
+        """Test resource initialization using improved methods."""
         try:
-            from main import SuperStudentGame
-            from utils.resource_manager import ResourceManager
-            from utils.audio_manager import AudioManager
-            from utils.sound_effects_manager import SoundEffectsManager
+            # Set headless environment for testing
+            os.environ['SDL_VIDEODRIVER'] = 'dummy'
+            os.environ['SDL_AUDIODRIVER'] = 'dummy'
             
-            # Initialize pygame for resource testing
-            pygame.init()
-            pygame.mixer.init()
+            from main import SuperStudentGame
             
             game = SuperStudentGame()
-            game.width, game.height = 800, 600
             
-            # Test individual components
-            resource_manager = ResourceManager()
-            audio_manager = AudioManager(cache_limit=5, max_workers=1)
-            sound_effects_manager = SoundEffectsManager()
-            
-            # Verify they work together
-            if not resource_manager or not audio_manager or not sound_effects_manager:
+            # Use the improved initialization methods
+            if not game.initialize_pygame():
+                print("Failed to initialize pygame")
+                return False
+                
+            if not game.initialize_resources():
+                print("Failed to initialize resources")
                 return False
             
+            # Verify core components are initialized
+            required_managers = ['glass_shatter', 'multi_touch', 'hud', 'checkpoint', 'flamethrower', 'center_piece']
+            for manager_name in required_managers:
+                if manager_name not in game.managers:
+                    print(f"Missing manager: {manager_name}")
+                    return False
+            
             # Test cleanup
-            audio_manager.cleanup()
-            sound_effects_manager.cleanup()
+            game.cleanup_resources()
             
             return True
             
         except Exception as e:
             print(f"Resource initialization error: {e}")
             return False
+        finally:
+            # Clean up environment variables
+            for var in ['SDL_VIDEODRIVER', 'SDL_AUDIODRIVER']:
+                if var in os.environ:
+                    del os.environ[var]
     
     def test_error_handling(self) -> bool:
         """Test error handling mechanisms."""
@@ -189,22 +207,22 @@ class MainStabilityTestSuite:
             return False
     
     def test_cleanup_functionality(self) -> bool:
-        """Test resource cleanup functionality."""
+        """Test resource cleanup functionality using improved methods."""
         try:
+            # Set headless environment for testing
+            os.environ['SDL_VIDEODRIVER'] = 'dummy'
+            os.environ['SDL_AUDIODRIVER'] = 'dummy'
+            
             from main import SuperStudentGame
             
-            pygame.init()
-            pygame.mixer.init()
-            
             game = SuperStudentGame()
-            game.width, game.height = 800, 600
             
-            # Initialize some resources
-            from utils.audio_manager import AudioManager
-            from utils.sound_effects_manager import SoundEffectsManager
-            
-            game.audio_manager = AudioManager(cache_limit=5)
-            game.sound_effects_manager = SoundEffectsManager()
+            # Initialize using improved methods
+            if not game.initialize_pygame():
+                return False
+                
+            if not game.initialize_resources():
+                return False
             
             # Test cleanup
             game.cleanup_resources()
@@ -214,9 +232,14 @@ class MainStabilityTestSuite:
         except Exception as e:
             print(f"Cleanup test error: {e}")
             return False
+        finally:
+            # Clean up environment variables
+            for var in ['SDL_VIDEODRIVER', 'SDL_AUDIODRIVER']:
+                if var in os.environ:
+                    del os.environ[var]
     
     def test_memory_efficiency(self) -> bool:
-        """Test memory usage and efficiency."""
+        """Test memory usage and efficiency with improved methods."""
         try:
             import psutil
             process = psutil.Process()
@@ -224,21 +247,20 @@ class MainStabilityTestSuite:
             # Measure initial memory
             initial_memory = process.memory_info().rss / 1024 / 1024  # MB
             
+            # Set headless environment for testing
+            os.environ['SDL_VIDEODRIVER'] = 'dummy'
+            os.environ['SDL_AUDIODRIVER'] = 'dummy'
+            
             from main import SuperStudentGame
             
-            pygame.init()
-            pygame.mixer.init()
-            
-            # Create and initialize game
+            # Create and initialize game using improved methods
             game = SuperStudentGame()
-            game.width, game.height = 800, 600
             
-            # Simulate resource usage
-            from utils.audio_manager import AudioManager
-            from utils.sound_effects_manager import SoundEffectsManager
-            
-            game.audio_manager = AudioManager(cache_limit=10)
-            game.sound_effects_manager = SoundEffectsManager()
+            if not game.initialize_pygame():
+                return False
+                
+            if not game.initialize_resources():
+                return False
             
             # Measure memory after initialization
             after_init_memory = process.memory_info().rss / 1024 / 1024  # MB
@@ -268,6 +290,11 @@ class MainStabilityTestSuite:
         except Exception as e:
             print(f"Memory test error: {e}")
             return False
+        finally:
+            # Clean up environment variables
+            for var in ['SDL_VIDEODRIVER', 'SDL_AUDIODRIVER']:
+                if var in os.environ:
+                    del os.environ[var]
     
     def test_level_integration(self) -> bool:
         """Test level class integration."""
