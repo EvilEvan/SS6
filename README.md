@@ -23,6 +23,45 @@ A multi-level educational game featuring various learning modes including alphab
   - Auto-detection of display type
   - Scalable UI elements
 
+## Screenshots
+
+### Welcome Screen
+The main welcome screen that greets players when starting the game.
+
+![Welcome Screen](screenshots/welcome_screen.png)
+
+### Level Selection Menu
+Choose from five different educational game modes.
+
+![Level Menu](screenshots/level_menu.png)
+
+### Game Levels
+
+#### Alphabet Level (A-Z)
+Learn and practice the alphabet by clicking on falling letters.
+
+![Alphabet Level](screenshots/alphabet_level.png)
+
+#### Numbers Level (1-10)
+Practice number recognition with falling number targets.
+
+![Numbers Level](screenshots/numbers_level.png)
+
+#### Shapes Level
+Identify and match geometric shapes including circles, squares, triangles, rectangles, and pentagons.
+
+![Shapes Level](screenshots/shapes_level.png)
+
+#### Colors Level
+Interactive color matching with bouncing colored dots and advanced physics.
+
+![Colors Level](screenshots/colors_level.png)
+
+#### Case Sensitivity Level (a-z)
+Practice lowercase letter recognition and case sensitivity.
+
+![Case Level](screenshots/case_level.png)
+
 ## Installation
 
 ### Quick Installation
