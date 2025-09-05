@@ -602,12 +602,27 @@ class ColorsLevel:
                 dot["dy"] *= -1
                 
     def _handle_dot_collisions(self):
-        """Handle collisions between dots using sparse spatial grid."""
+        """Handle collisions between dots using sparse spatial grid with frame skipping."""
         if len(self.dots) < 2:
             return
+            
+        # PERFORMANCE OPTIMIZATION: Skip collision detection every other frame for better FPS
+        if not hasattr(self, '_collision_frame_skip'):
+            self._collision_frame_skip = 0
+        
+        self._collision_frame_skip += 1
+        if self._collision_frame_skip % 2 != 0:  # Skip every other frame
+            return
+            
         grid = self._create_spatial_grid()
         checked_pairs = set()
+        collision_count = 0
+        max_collisions_per_frame = 10  # Limit collisions per frame for performance
+        
         for (gx, gy), cell_dots in grid.items():
+            if collision_count >= max_collisions_per_frame:
+                break
+                
             # Iterate over this cell and neighbouring cells
             for dx in (-1, 0, 1):
                 for dy in (-1, 0, 1):
@@ -617,6 +632,8 @@ class ColorsLevel:
                     neighbor_dots = grid[ng]
                     for i in cell_dots:
                         for j in neighbor_dots:
+                            if collision_count >= max_collisions_per_frame:
+                                break
                             if i >= j:
                                 continue
                             pair = (i, j)
@@ -633,6 +650,7 @@ class ColorsLevel:
                             max_dist = dot1["radius"] + dot2["radius"]
                             if dist_sq < max_dist * max_dist and dist_sq > 0:
                                 self._resolve_collision(dot1, dot2, dx_, dy_, math.sqrt(dist_sq))
+                                collision_count += 1
 
     def _resolve_collision(self, dot1, dot2, dx, dy, distance):
         """Resolve collision between two dots."""
@@ -669,18 +687,24 @@ class ColorsLevel:
             dot2["dx"] = temp_dx * 0.8
             dot2["dy"] = temp_dy * 0.8
             
-            # Create small particle effect at collision point
-            collision_x = (dot1["x"] + dot2["x"]) / 2
-            collision_y = (dot1["y"] + dot2["y"]) / 2
-            for _ in range(3):
+            # PERFORMANCE OPTIMIZATION: Reduce particle effects for collisions
+            # Only create particles for 1 in 3 collisions to reduce overhead
+            if not hasattr(self, '_collision_particle_counter'):
+                self._collision_particle_counter = 0
+            
+            self._collision_particle_counter += 1
+            if self._collision_particle_counter % 3 == 0:  # Only every 3rd collision
+                collision_x = (dot1["x"] + dot2["x"]) / 2
+                collision_y = (dot1["y"] + dot2["y"]) / 2
+                # Reduced from 3 particles to 1 particle per collision
                 self.level_resources.create_particle(
                     collision_x, 
                     collision_y,
                     random.choice([dot1["color"], dot2["color"]]),
-                    random.randint(5, 10),
-                    random.uniform(-2, 2), 
-                    random.uniform(-2, 2),
-                    10
+                    random.randint(3, 6),  # Smaller particles (was 5-10)
+                    random.uniform(-1, 1),  # Slower movement (was -2,2)
+                    random.uniform(-1, 1), 
+                    8  # Shorter duration (was 10)
                 )
                 
     def _create_collision_enabled_effect(self):
@@ -753,34 +777,35 @@ class ColorsLevel:
                 draw_x = int(dot["x"] + offset_x)
                 draw_y = int(dot["y"] + offset_y)
                 
-                # Draw depth gradient (multiple circles for smooth gradient)
-                for i in range(3):
-                    gradient_radius = shimmer_radius - (i * shimmer_radius // 4)
-                    if gradient_radius > 0:
-                        # Interpolate between center and edge color
-                        blend_factor = i / 3.0
-                        blended_color = tuple(
-                            int(center_color[j] * (1 - blend_factor) + edge_color[j] * blend_factor)
-                            for j in range(3)
-                        )
-                        
-                        # Create surface with alpha for shimmer effect
-                        if i == 0:  # Outermost circle gets shimmer alpha
-                            # Use cached surface and adjust alpha on the fly
-                            dot_surface = self._get_circle_surface(blended_color, gradient_radius).copy()
-                            dot_surface.set_alpha(shimmer_alpha)
-                            self.screen.blit(dot_surface, (draw_x - gradient_radius, draw_y - gradient_radius))
-                        else:
-                            pygame.draw.circle(self.screen, blended_color, 
-                                             (draw_x, draw_y), gradient_radius)
+                # OPTIMIZED: Simplified 2-layer gradient for better performance (was 3 layers)
+                # Outer darker circle
+                pygame.draw.circle(self.screen, edge_color, (draw_x, draw_y), shimmer_radius)
+                
+                # Inner lighter circle with cached surface and shimmer alpha
+                inner_radius = max(1, shimmer_radius - 4)
+                if dot["target"] and shimmer_alpha < 255:
+                    # Only use alpha blending for target dots with shimmer
+                    dot_surface = self._get_circle_surface(center_color, inner_radius).copy()
+                    dot_surface.set_alpha(shimmer_alpha)
+                    self.screen.blit(dot_surface, (draw_x - inner_radius, draw_y - inner_radius))
+                else:
+                    # Direct drawing for non-target dots (much faster)
+                    pygame.draw.circle(self.screen, center_color, (draw_x, draw_y), inner_radius)
                                              
-                # Add extra glow for target dots
+                # OPTIMIZED: Simpler glow effect with cached surface
                 if dot["target"]:
-                    glow_radius = shimmer_radius + 8
-                    glow_intensity = int(50 + 30 * math.sin(self.frame_counter * 0.15))
-                    glow_surface = pygame.Surface((glow_radius * 2, glow_radius * 2), pygame.SRCALPHA)
-                    pygame.draw.circle(glow_surface, (*dot["color"], glow_intensity), 
-                                     (glow_radius, glow_radius), glow_radius)
+                    glow_radius = shimmer_radius + 6  # Reduced from +8
+                    glow_intensity = int(60 + 25 * math.sin(self.frame_counter * 0.1))  # Slower animation
+                    # Use cached glow surface to avoid constant surface creation
+                    glow_key = (dot["color"], glow_radius, glow_intensity // 10)  # Quantize intensity
+                    glow_surface = self.surface_cache.get(glow_key)
+                    if glow_surface is None:
+                        glow_surface = pygame.Surface((glow_radius * 2, glow_radius * 2), pygame.SRCALPHA)
+                        pygame.draw.circle(glow_surface, (*dot["color"], glow_intensity), 
+                                         (glow_radius, glow_radius), glow_radius)
+                        # Only cache if we have room (prevent memory growth)
+                        if len(self.surface_cache) < self.surface_cache_limit:
+                            self.surface_cache[glow_key] = glow_surface
                     self.screen.blit(glow_surface, (draw_x - glow_radius, draw_y - glow_radius))
                                   
         # Draw explosions using level resource manager
